@@ -6,7 +6,7 @@
 <title>恐怖のギフト交換所</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
-/* Layout: 1カラムのツール。上に見出しと保存状態、タブ3つ(マッチ/所持数/ギルド)。羊皮紙色の地に紫インクとカボチャ色。 */
+/* Layout: 1カラムのツール。上に見出しと保存状態、タブ3つ(マッチ/メダル登録/ギルド)。羊皮紙色の地に紫インクとカボチャ色。 */
 :root{
   --bg:#f2ead8; --surface:#fbf6ea; --ink:#2b2140; --muted:#6d6283; --line:#d9ccb0;
   --accent:#b9540f; --accent-ink:#ffffff; --good:#2f6b2c; --warn:#a33a2a;
@@ -95,7 +95,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
   <div id="notice"></div>
   <div class="tabs" id="tabs" role="tablist">
     <button role="tab" data-tab="match" aria-selected="true">マッチ</button>
-    <button role="tab" data-tab="mine" aria-selected="false">所持数</button>
+    <button role="tab" data-tab="mine" aria-selected="false">メダル登録</button>
     <button role="tab" data-tab="guild" aria-selected="false">ギルド</button>
   </div>
   <main id="view"></main>
@@ -226,7 +226,7 @@ function viewMatch(){
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
   h+=`<p class="notice">受け渡しはゲーム内の「贈る」「援助要請」で行います。贈ったら「贈った」を押すと、あなたの枚数が減り、相手の枚数が増えます。「コンプ」は、そのメダルで相手(自分)のテーマが完成することを示します。交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
-  if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーが所持数を登録すると、ここに候補が出ます。</p>`;
+  if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーがメダルを登録すると、ここに候補が出ます。</p>`;
   list.forEach(x=>{
     const give=x.give.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id)).join("");
     const get=x.get.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id))).join("");
