@@ -479,11 +479,26 @@ document.addEventListener("submit",async e=>{
 
 render();
 if(code)load();
-const refresh=()=>{if(ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending)load()};
-setInterval(refresh,5000);
-document.addEventListener("visibilitychange",refresh);
-window.addEventListener("focus",refresh);
-window.addEventListener("online",refresh);
+/* 更新確認: 5秒ごとに軽い「版番号」だけを問い合わせ、変わったときだけ全データを取得する(通信量の節約)。
+   版番号が取れないとき・60秒に1回・画面に戻ったときは、そのまま全データを取得する。 */
+let lastVer=null, lastFull=0, polling=false;
+const idle=()=>ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending;
+async function refresh(force){
+  if(!idle()||polling)return;
+  polling=true;
+  try{
+    let v=null;
+    try{v=await rpc("fw_ver",{p_code:code,p_member:ident.id})}catch(e){v=null}
+    if(!force&&v!==null&&v===lastVer&&Date.now()-lastFull<60000)return;
+    await load();
+    lastFull=Date.now();
+    lastVer=(loaded&&!netErr)?v:null;
+  }finally{polling=false}
+}
+setInterval(()=>refresh(false),5000);
+document.addEventListener("visibilitychange",()=>refresh(true));
+window.addEventListener("focus",()=>refresh(true));
+window.addEventListener("online",()=>refresh(true));
 </script>
 </body>
 </html>
