@@ -116,6 +116,9 @@ details.card summary{cursor:pointer;font-weight:700}
 .log{font-size:.85rem;margin:0;padding:0;list-style:none}
 .log li{padding:4px 0;border-bottom:1px dashed var(--line)}
 .stat{margin:0 0 8px;font-size:.85rem}
+.ack{color:var(--muted);margin-left:4px}
+.ack.ok{color:var(--good)}
+.ack.wait{color:var(--accent)}
 .stat.ok{color:var(--good)}
 .stat.gap{color:var(--warn);background:var(--bg);border:1px solid var(--warn);border-radius:4px;padding:6px 8px;font-size:.9rem}
 .card.diff{border-left:5px solid var(--warn)}
@@ -144,7 +147,7 @@ THEMES.forEach(([tn,names],t)=>names.forEach((n,p)=>MEDALS.push({id:t*9+p+1,t,p,
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const qty=(q,id)=>(q&&q[id])|0;
-const ERR={"invalid guild code":"合言葉が違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
+const ERR={"invalid gift":"確認できる記録がありません。","invalid guild code":"合言葉が違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
 
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
@@ -214,18 +217,23 @@ function chip(m,extra,qq,to,done){
 const nameOf=id=>(members.find(m=>m.id===id)||{}).name||"不明";
 const maxGift=()=>gifts.reduce((a,g)=>Math.max(a,g.id),0);
 const unread=()=>{if(!ident)return[];const s=store.get("fw_seen_"+ident.id)|0;return gifts.filter(g=>g.to===ident.id&&g.id>s).sort((a,b)=>a.id-b.id)};
+function ackMark(g){
+  const mine=g.to===ident.id;
+  return mine?(g.ok?`<small class="ack ok">確認済み</small>`:`<button class="gift" data-confirm="${g.id}">受け取りを確認</button>`)
+             :(g.ok?`<small class="ack ok">相手が確認済み</small>`:`<small class="ack wait">相手の確認待ち</small>`);
+}
 function recvBanner(un){
   const show=un.slice(-5).reverse();
-  const li=show.map(g=>{const m=MEDALS.find(x=>x.id===g.medal);return `<li>${esc(nameOf(g.from))}さんから${esc(m?m.name:"メダル")}を${g.qty}枚受け取りました</li>`}).join("");
+  const li=show.map(g=>{const m=MEDALS.find(x=>x.id===g.medal);return `<li>${esc(nameOf(g.from))}さんから${esc(m?m.name:"メダル")}を${g.qty}枚受け取りました ${ackMark(g)}</li>`}).join("");
   const more=un.length>show.length?`<p class="sub">ほか${un.length-show.length}件</p>`:"";
   return `<div class="notice recv"><b>前回から</b><ul>${li}</ul>${more}<button class="btn" data-seen="1">確認した</button></div>`;
 }
 
 function pairStat(oid){
-  const st={sent:0,recv:0,sm:new Set(),rm:new Set()};
+  const st={sent:0,recv:0,sp:0,rp:0,sm:new Set(),rm:new Set()};
   gifts.forEach(g=>{
-    if(g.from===ident.id&&g.to===oid){st.sent+=g.qty;st.sm.add(g.medal)}
-    else if(g.to===ident.id&&g.from===oid){st.recv+=g.qty;st.rm.add(g.medal)}
+    if(g.from===ident.id&&g.to===oid){st.sent+=g.qty;st.sm.add(g.medal);if(!g.ok)st.sp+=g.qty}
+    else if(g.to===ident.id&&g.from===oid){st.recv+=g.qty;st.rm.add(g.medal);if(!g.ok)st.rp+=g.qty}
   });
   return st;
 }
@@ -234,9 +242,11 @@ function statLine(st,oid){
   const d=gap(st);
   let t,c="";
   if(!st.sent&&!st.recv)t="まだやり取りなし";
-  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 成立しています`;c=" ok"}
+  else if(d===0&&!st.sp&&!st.rp){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 成立しています`;c=" ok"}
+  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
   else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
+  t+=(st.sp?`<br>相手の確認待ち ${st.sp}枚`:"")+(st.rp?`<br><strong>あなたの確認待ち ${st.rp}枚</strong>`:"");
   return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
 }
 function viewMatch(){
@@ -312,7 +322,7 @@ function viewGuild(){
   const groups=new Map();
   mine.forEach(g=>{const o=g.from===ident.id?g.to:g.from;if(!groups.has(o))groups.set(o,{o,list:[],sent:0,recv:0,last:g.at});const x=groups.get(o);x.list.push(g);if(g.from===ident.id)x.sent+=g.qty;else x.recv+=g.qty});
   const fmt=at=>new Date(at).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
-  const line=g=>{const m=MEDALS.find(x=>x.id===g.medal);const out=g.from===ident.id;return `<li>${fmt(g.at)}　<b>${out?"贈った":"受け取った"}</b>　${esc(m?m.name:"")}${g.qty>1?` ×${g.qty}`:""}</li>`};
+  const line=g=>{const m=MEDALS.find(x=>x.id===g.medal);const out=g.from===ident.id;return `<li>${fmt(g.at)}　<b>${out?"贈った":"受け取った"}</b>　${esc(m?m.name:"")}${g.qty>1?` ×${g.qty}`:""}　${ackMark(g)}</li>`};
   let h=`<h2>交換履歴(相手ごと・新しい順)</h2>`;
   if(!groups.size)h+=`<p class="sub">まだありません。</p>`;
   groups.forEach(x=>{
@@ -351,6 +361,11 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;pending=null;render();return}
+  if(d.confirm){
+    try{await rpc("fw_confirm",{p_code:code,p_member:ident.id,p_secret:ident.secret,p_gift:+d.confirm});setStatus("受け取りを記録しました")}
+    catch(err){setStatus(err.message==="network"?"通信に失敗しました":err.message,true)}
+    await load();return;
+  }
   if(d.hist){tab="guild";pending=null;render();const el=document.getElementById("h_"+d.hist);if(el)el.scrollIntoView({block:"start"});return}
   if(d.filter){filter=d.filter;render();return}
   if(d.mode){gateMode=d.mode;gateErr="";render();return}
