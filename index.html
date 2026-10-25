@@ -140,12 +140,13 @@ THEMES.forEach(([tn,names],t)=>names.forEach((n,p)=>MEDALS.push({id:t*9+p+1,t,p,
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const qty=(q,id)=>(q&&q[id])|0;
-const ERR={"invalid guild code":"合言葉が違います。","name taken":"その名前は使われています。別の名前にするか、復元キーで入ってください。","invalid member":"名前または復元キーが違います。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
+const ERR={"invalid guild code":"合言葉が違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
 
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
 let members=[], hold=new Map(), gifts=[], me=null;
 let tab="match", filter="all", pending=null, gateErr="", gateMode="join", loaded=false, netErr=false;
+let hasPw; // undefined=未確認
 let dirty=false, saving=false, timer=null, changed=new Set();
 
 async function rpc(fn,args){
@@ -170,6 +171,7 @@ async function load(){
       if(!members.some(m=>m.id===ident.id)){store.del("fw_ident");ident=null;me=null}
       else if(!dirty&&!saving)me={name:ident.name,q:{...(h.get(ident.id)||{})}};
     }
+    if(ident&&hasPw===undefined){try{hasPw=await rpc("fw_has_pw",{p_code:code,p_member:ident.id,p_secret:ident.secret})}catch(e){}}
     loaded=true;
   }catch(e){
     if(e.raw==="invalid guild code"){store.del("fw_code");code=null;gateErr=e.message}
@@ -263,6 +265,7 @@ function viewMine(){
   return h;
 }
 
+const pwForm=(label,btn)=>`<form class="form" id="pwForm"><input id="pwInput" type="password" minlength="4" maxlength="64" placeholder="${label}(4文字以上)" autocomplete="new-password"><button class="btn" type="submit">${btn}</button></form>`;
 function viewGuild(){
   const rows=members.map(m=>({m,q:m.id===ident.id?me.q:(hold.get(m.id)||{})}))
     .sort((a,b)=>MEDALS.filter(x=>qty(b.q,x.id)>0).length-MEDALS.filter(x=>qty(a.q,x.id)>0).length);
@@ -285,7 +288,7 @@ function viewGuild(){
     h+=`<section class="card"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header><ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
   });
   h+=`<h2 style="margin-top:18px">ギルドのメンバー</h2>`+tb;
-  h+=`<details class="card"><summary>別の端末で使うときの復元キー</summary><p class="sub">別のスマホやPCで開いたら、「復元キーで入る」に名前とこのキーを入力します。他の人には教えないでください。</p><div class="keybox">${esc(ident.secret)}</div><button class="linkbtn" data-logout="1">この端末からログアウト</button></details>`;
+  h+=`<details class="card"><summary>アカウント</summary><p class="sub">別のスマホやPCでは、名前とパスワードでログインできます。</p>${pwForm("パスワードを変更する","変更する")}<button class="linkbtn" data-logout="1">この端末からログアウト</button></details>`;
   return h;
 }
 
@@ -295,11 +298,11 @@ function viewGate(){
       <form class="form" id="codeForm"><input id="codeInput" maxlength="20" placeholder="合言葉" autocomplete="off" autocapitalize="characters"><button class="btn" type="submit">次へ</button></form>${gateErr?`<p class="err">${esc(gateErr)}</p>`:""}</section>`;
   }
   const join=gateMode==="join";
-  return `<section class="card"><h2>${join?"はじめて使う":"復元キーで入る"}</h2>
-    <p class="sub">${join?"ギルド内で表示される名前を決めてください(ゲーム内の名前がおすすめ)。":"最初に登録した名前と、復元キーを入力してください。"}</p>
-    <form class="form" id="${join?"joinForm":"loginForm"}"><input id="nameInput" maxlength="20" placeholder="名前" autocomplete="nickname">${join?"":`<input id="keyInput" placeholder="復元キー" autocomplete="off">`}<button class="btn" type="submit">${join?"登録する":"入る"}</button></form>
+  return `<section class="card"><h2>${join?"はじめて使う":"ログイン"}</h2>
+    <p class="sub">${join?"ギルド内で表示される名前(ゲーム内の名前がおすすめ)と、自分用のパスワードを決めてください。":"登録した名前とパスワードを入力してください。"}</p>
+    <form class="form" id="${join?"joinForm":"loginForm"}"><input id="nameInput" maxlength="20" placeholder="名前" autocomplete="username"><input id="keyInput" type="password" maxlength="64" placeholder="パスワード${join?"(4文字以上)":""}" autocomplete="${join?"new-password":"current-password"}"><button class="btn" type="submit">${join?"登録する":"ログイン"}</button></form>
     ${gateErr?`<p class="err">${esc(gateErr)}</p>`:""}
-    <p style="margin:12px 0 0"><button class="linkbtn" data-mode="${join?"login":"join"}">${join?"登録済みの方は復元キーで入る":"はじめて使う方はこちら"}</button></p></section>`;
+    <p style="margin:12px 0 0"><button class="linkbtn" data-mode="${join?"login":"join"}">${join?"登録済みの方はログイン":"はじめて使う方はこちら"}</button></p></section>`;
 }
 
 function render(){
@@ -307,7 +310,7 @@ function render(){
   $("#tabs").hidden=!ready;
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
   const un=ready?unread():[];
-  $("#notice").innerHTML=(netErr?`<p class="notice warn">サーバーに接続できません。通信を確認してください。</p>`:"")+(un.length?recvBanner(un):"");
+  $("#notice").innerHTML=(netErr?`<p class="notice warn">サーバーに接続できません。通信を確認してください。</p>`:"")+(ready&&hasPw===false?`<div class="notice warn"><b>パスワードを設定してください</b><p class="sub">別の端末でログインするときに使います。</p>${pwForm("パスワード","設定する")}</div>`:"")+(un.length?recvBanner(un):"");
   if(!ready){$("#view").innerHTML=(code&&!loaded&&!netErr&&ident)?`<p class="empty">読み込み中…</p>`:viewGate();return}
   $("#view").innerHTML=tab==="match"?viewMatch():tab==="mine"?viewMine():viewGuild();
 }
@@ -318,7 +321,7 @@ document.addEventListener("click",async e=>{
   if(d.tab){tab=d.tab;pending=null;render();return}
   if(d.filter){filter=d.filter;render();return}
   if(d.mode){gateMode=d.mode;gateErr="";render();return}
-  if(d.logout){store.del("fw_ident");ident=null;me=null;gateErr="";render();return}
+  if(d.logout){store.del("fw_ident");ident=null;me=null;hasPw=undefined;gateErr="";render();return}
   if(d.d&&me){const id=d.id;me.q[id]=Math.max(0,Math.min(999,qty(me.q,id)+Number(d.d)));changed.add(id);queueSave();render();return}
   if(d.seen&&ident){store.set("fw_seen_"+ident.id,maxGift());render();return}
   if(d.gift){pending={to:d.to,medal:+d.gift};render();return}
@@ -339,10 +342,17 @@ document.addEventListener("submit",async e=>{
       const c=$("#codeInput").value.trim().toUpperCase();if(!c)return;
       await rpc("fw_state",{p_code:c});code=c;store.set("fw_code",c);await load();return;
     }
+    if(id==="pwForm"){
+      const pw=$("#pwInput").value;
+      try{await rpc("fw_set_password",{p_code:code,p_member:ident.id,p_secret:ident.secret,p_password:pw});hasPw=true;setStatus("パスワードを設定しました");render()}
+      catch(err){setStatus(err.message==="network"?"通信に失敗しました":err.message,true)}
+      return;
+    }
     const name=$("#nameInput").value.trim();if(!name)return;
+    const pw=$("#keyInput").value;
     let r;
-    if(id==="joinForm"){r=await rpc("fw_join",{p_code:code,p_name:name});ident={id:r.member_id,secret:r.secret,name:r.name};tab="mine";store.set("fw_seen_"+ident.id,maxGift())}
-    else{const key=$("#keyInput").value.trim();r=await rpc("fw_login",{p_code:code,p_name:name,p_secret:key});ident={id:r.member_id,secret:key,name:r.name};tab="match"}
+    if(id==="joinForm"){r=await rpc("fw_join",{p_code:code,p_name:name,p_password:pw});ident={id:r.member_id,secret:r.secret,name:r.name};hasPw=true;tab="mine";store.set("fw_seen_"+ident.id,maxGift())}
+    else{r=await rpc("fw_login",{p_code:code,p_name:name,p_password:pw});ident={id:r.member_id,secret:r.secret,name:r.name};hasPw=r.has_pw;tab="match"}
     store.set("fw_ident",ident);await load();
   }catch(err){gateErr=err.message==="network"?"通信に失敗しました。":err.message;
     if(err.raw==="invalid guild code"){store.del("fw_code");code=null}
@@ -351,7 +361,7 @@ document.addEventListener("submit",async e=>{
 
 render();
 if(code)load();
-setInterval(()=>{if(document.visibilityState==="visible"&&!dirty&&!saving&&!pending)load()},20000);
+setInterval(()=>{if(ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending)load()},20000);
 </script>
 </body>
 </html>
