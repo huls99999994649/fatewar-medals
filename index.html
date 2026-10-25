@@ -90,7 +90,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
       <h1>恐怖のギフト交換所</h1>
       <p class="sub">Fate War ハロウィンイベント用。ギルドの余りメダルと欲しいメダルを突き合わせます。</p>
     </div>
-    <div class="status" id="status" role="status"></div>
+    <div style="text-align:right"><div class="status" id="status" role="status"></div><button class="linkbtn" id="whoBtn" data-tab="account" hidden></button></div>
   </div>
   <div id="notice"></div>
   <div class="tabs" id="tabs" role="tablist">
@@ -266,6 +266,13 @@ function viewMine(){
 }
 
 const pwForm=(label,btn)=>`<form class="form" id="pwForm"><input id="pwInput" type="password" minlength="4" maxlength="64" placeholder="${label}(4文字以上)" autocomplete="new-password"><button class="btn" type="submit">${btn}</button></form>`;
+function viewAccount(){
+  return `<p style="margin:0 0 12px"><button class="linkbtn" data-tab="match">← 戻る</button></p>
+  <section class="card"><h2>アカウント</h2><p class="sub">別のスマホやPCでも、同じ名前とパスワードでログインできます。名前を変えたら、次からは新しい名前でログインします。</p></section>
+  <section class="card"><h3>登録名</h3><form class="form" id="nameForm"><input id="renameInput" maxlength="20" value="${esc(ident.name)}" autocomplete="off"><button class="btn" type="submit">変更する</button></form></section>
+  <section class="card"><h3>パスワード</h3>${pwForm("新しいパスワード","変更する")}</section>
+  <p><button class="linkbtn" data-logout="1">この端末からログアウト</button></p>`;
+}
 function viewGuild(){
   const rows=members.map(m=>({m,q:m.id===ident.id?me.q:(hold.get(m.id)||{})}))
     .sort((a,b)=>MEDALS.filter(x=>qty(b.q,x.id)>0).length-MEDALS.filter(x=>qty(a.q,x.id)>0).length);
@@ -288,7 +295,6 @@ function viewGuild(){
     h+=`<section class="card"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header><ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
   });
   h+=`<h2 style="margin-top:18px">ギルドのメンバー</h2>`+tb;
-  h+=`<details class="card"><summary>アカウント</summary><p class="sub">別のスマホやPCでは、名前とパスワードでログインできます。</p>${pwForm("パスワードを変更する","変更する")}<button class="linkbtn" data-logout="1">この端末からログアウト</button></details>`;
   return h;
 }
 
@@ -309,10 +315,11 @@ function render(){
   const ready=code&&ident&&me;
   $("#tabs").hidden=!ready;
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===tab));
+  const w=$("#whoBtn");w.hidden=!ready;if(ready)w.textContent=ident.name+"さん";
   const un=ready?unread():[];
-  $("#notice").innerHTML=(netErr?`<p class="notice warn">サーバーに接続できません。通信を確認してください。</p>`:"")+(ready&&hasPw===false?`<div class="notice warn"><b>パスワードを設定してください</b><p class="sub">別の端末でログインするときに使います。</p>${pwForm("パスワード","設定する")}</div>`:"")+(un.length?recvBanner(un):"");
+  $("#notice").innerHTML=(netErr?`<p class="notice warn">サーバーに接続できません。通信を確認してください。</p>`:"")+(ready&&hasPw===false&&tab!=="account"?`<div class="notice warn"><b>パスワードを設定してください</b><p class="sub">別の端末でログインするときに使います。</p>${pwForm("パスワード","設定する")}</div>`:"")+(un.length?recvBanner(un):"");
   if(!ready){$("#view").innerHTML=(code&&!loaded&&!netErr&&ident)?`<p class="empty">読み込み中…</p>`:viewGate();return}
-  $("#view").innerHTML=tab==="match"?viewMatch():tab==="mine"?viewMine():viewGuild();
+  $("#view").innerHTML=tab==="match"?viewMatch():tab==="mine"?viewMine():tab==="account"?viewAccount():viewGuild();
 }
 
 document.addEventListener("click",async e=>{
@@ -341,6 +348,12 @@ document.addEventListener("submit",async e=>{
     if(id==="codeForm"){
       const c=$("#codeInput").value.trim().toUpperCase();if(!c)return;
       await rpc("fw_state",{p_code:c});code=c;store.set("fw_code",c);await load();return;
+    }
+    if(id==="nameForm"){
+      const nn=$("#renameInput").value.trim();if(!nn)return;
+      try{const r2=await rpc("fw_rename",{p_code:code,p_member:ident.id,p_secret:ident.secret,p_name:nn});ident.name=r2.name;store.set("fw_ident",ident);if(me)me.name=r2.name;setStatus("名前を変更しました");await load()}
+      catch(err){setStatus(err.message==="network"?"通信に失敗しました":err.message,true)}
+      return;
     }
     if(id==="pwForm"){
       const pw=$("#pwInput").value;
