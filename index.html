@@ -49,6 +49,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{display:inline-flex;gap:5px;align-items:center;border:1.5px solid currentColor;border-radius:4px;padding:1px 7px;font-size:.82rem;background:transparent}
 .chip span{color:var(--ink)}
+.rar{display:flex;gap:10px;align-items:baseline;margin:10px 0 4px;padding-top:8px;border-top:1px solid var(--line);font-size:.85rem}.rar b{font-size:.9rem}.rar span{color:var(--muted)}.rar.pre b{color:var(--r-pre)}.rar.cla b{color:var(--r-cla)}.rar.leg b{color:var(--r-leg)}
 .chip.pre{color:var(--r-pre)} .chip.cla{color:var(--r-cla)} .chip.leg{color:var(--r-leg)}
 .chip em{font-style:normal;font-size:.7rem;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:3px;padding:0 4px}
 .chip small{color:var(--muted);font-size:.72rem}
@@ -279,17 +280,21 @@ function viewMatch(){
   if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーがメダルを登録すると、ここに候補が出ます。</p>`;
   list.forEach(x=>{
     const st=pairStat(x.m.id);
-    const give=x.give.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
-    const get=x.get.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
-    let conf="";
-    if(pending&&pending.to===x.m.id){
-      const pm=MEDALS.find(m=>m.id===pending.medal);
-      conf=`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`;
-    }
+    const pm=pending&&pending.to===x.m.id?MEDALS.find(m=>m.id===pending.medal):null;
+    let blocks="";
+    ["pre","cla","leg"].forEach(r=>{
+      const gv=x.give.filter(m=>m.r===r), gt=x.get.filter(m=>m.r===r);
+      if(!gv.length&&!gt.length)return;
+      const n=Math.min(gv.length,gt.length);
+      const give=gv.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
+      const get=gt.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
+      const conf=pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+      blocks+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>マッチ ${n}組</span></div>
+      <div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
+      <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
+    });
     h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"片方向のみ"}</span></header>
-      ${statLine(st,x.m.id)}
-      <div class="row"><span class="lab">あなたが贈れる(${x.give.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
-      <div class="row"><span class="lab">あなたがもらえる(${x.get.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div></section>`;
+      ${statLine(st,x.m.id)}${blocks}</section>`;
   });
   return h;
 }
