@@ -464,7 +464,11 @@ document.addEventListener("submit",async e=>{
 
 render();
 if(code)load();
-setInterval(()=>{if(ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending)load()},20000);
+const refresh=()=>{if(ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending)load()};
+setInterval(refresh,5000);
+document.addEventListener("visibilitychange",refresh);
+window.addEventListener("focus",refresh);
+window.addEventListener("online",refresh);
 </script>
 </body>
 </html>
