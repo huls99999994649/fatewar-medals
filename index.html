@@ -116,6 +116,9 @@ details.card summary{cursor:pointer;font-weight:700}
 .log{font-size:.85rem;margin:0;padding:0;list-style:none}
 .log li{padding:4px 0;border-bottom:1px dashed var(--line)}
 .stat{margin:0 0 8px;font-size:.85rem}
+.stat.ok{color:var(--good)}
+.stat.gap{color:var(--warn);background:var(--bg);border:1px solid var(--warn);border-radius:4px;padding:6px 8px;font-size:.9rem}
+.card.diff{border-left:5px solid var(--warn)}
 .recv{border-color:var(--accent)}
 .recv ul{margin:6px 0 10px;padding-left:1.2em}
 </style>
@@ -226,9 +229,15 @@ function pairStat(oid){
   });
   return st;
 }
+const gap=st=>st.sent-st.recv;
 function statLine(st,oid){
-  const t=!st.sent&&!st.recv?"まだやり取りなし":st.sent&&!st.recv?`あなたは贈り済み(${st.sent}枚)／まだ受け取っていません`:!st.sent?`受け取り済み(${st.recv}枚)／まだ贈っていません`:`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;
-  return `<p class="stat"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
+  const d=gap(st);
+  let t,c="";
+  if(!st.sent&&!st.recv)t="まだやり取りなし";
+  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 釣り合っています`;c=" ok"}
+  else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
+  else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
+  return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
 }
 function viewMatch(){
   const miss=MEDALS.filter(m=>qty(me.q,m.id)===0);
@@ -251,7 +260,7 @@ function viewMatch(){
       const pm=MEDALS.find(m=>m.id===pending.medal);
       conf=`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`;
     }
-    h+=`<section class="card"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`交換 ${x.swaps}組 成立`:"片方向のみ"}</span></header>
+    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`交換 ${x.swaps}組 成立`:"片方向のみ"}</span></header>
       ${statLine(st,x.m.id)}
       <div class="row"><span class="lab">あなたが贈れる(${x.give.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
       <div class="row"><span class="lab">あなたがもらえる(${x.get.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div></section>`;
@@ -307,7 +316,8 @@ function viewGuild(){
   let h=`<h2>交換履歴(相手ごと・新しい順)</h2>`;
   if(!groups.size)h+=`<p class="sub">まだありません。</p>`;
   groups.forEach(x=>{
-    h+=`<section class="card" id="h_${x.o}"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header><ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
+    const dd=x.sent-x.recv;
+    h+=`<section class="card${dd?" diff":""}" id="h_${x.o}"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header>${dd>0?`<p class="stat gap">⚠ <strong>あと${dd}枚もらっていません</strong></p>`:dd<0?`<p class="stat gap">⚠ <strong>あと${-dd}枚贈っていません</strong></p>`:""}<ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
   });
   h+=`<h2 style="margin-top:18px">ギルドのメンバー</h2>`+tb;
   return h;
