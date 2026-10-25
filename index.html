@@ -145,7 +145,7 @@ const ERR={"invalid guild code":"合言葉が違います。","name taken":"そ�
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
 let members=[], hold=new Map(), gifts=[], me=null;
-let tab="match", filter="all", pending=null, gateErr="", gateMode="join", loaded=false, netErr=false;
+let tab="match", filter="all", pending=null, gateErr="", gateMode="login", loaded=false, netErr=false;
 let hasPw; // undefined=未確認
 let dirty=false, saving=false, timer=null, changed=new Set();
 
