@@ -479,7 +479,7 @@ document.addEventListener("submit",async e=>{
 
 render();
 if(code)load();
-/* 更新確認: 5秒ごとに軽い「版番号」だけを問い合わせ、変わったときだけ全データを取得する(通信量の節約)。
+/* 更新確認: 3秒ごとに軽い「版番号」だけを問い合わせ、変わったときだけ全データを取得する(通信量の節約)。
    版番号が取れないとき・60秒に1回・画面に戻ったときは、そのまま全データを取得する。 */
 let lastVer=null, lastFull=0, polling=false;
 const idle=()=>ident&&!(document.activeElement&&document.activeElement.tagName==="INPUT")&&document.visibilityState==="visible"&&!dirty&&!saving&&!pending;
@@ -495,7 +495,7 @@ async function refresh(force){
     lastVer=(loaded&&!netErr)?v:null;
   }finally{polling=false}
 }
-setInterval(()=>refresh(false),5000);
+setInterval(()=>refresh(false),3000);
 document.addEventListener("visibilitychange",()=>refresh(true));
 window.addEventListener("focus",()=>refresh(true));
 window.addEventListener("online",()=>refresh(true));
