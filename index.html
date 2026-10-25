@@ -377,7 +377,7 @@ function gateForm(){
   }
   const join=gateMode==="join";
   return `<section class="card"><h2>${join?"はじめて使う":"ログイン"}</h2>
-    <p class="sub">${join?"ギルド内で表示される名前(ゲーム内の名前がおすすめ)と、自分用のパスワードを決めてください。":"登録した名前とパスワードを入力してください。"}</p>
+    <p class="sub">${join?"ゲーム内の名前と、自分用のパスワードを設定してください。名前はアプリ内のメンバーに表示されます。":"登録した名前とパスワードを入力してください。"}</p>
     <form class="form" id="${join?"joinForm":"loginForm"}"><input id="nameInput" maxlength="20" placeholder="名前" autocomplete="username"><input id="keyInput" type="password" maxlength="64" placeholder="パスワード${join?"(4文字以上)":""}" autocomplete="${join?"new-password":"current-password"}"><button class="btn" type="submit">${join?"登録する":"ログイン"}</button></form>
     ${gateErr?`<p class="err">${esc(gateErr)}</p>`:""}
     <p style="margin:12px 0 0"><button class="linkbtn" data-mode="${join?"login":"join"}">${join?"登録済みの方はログイン":"はじめて使う方はこちら"}</button></p></section>`;
