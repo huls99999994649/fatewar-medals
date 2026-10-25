@@ -122,6 +122,7 @@ details.card summary{cursor:pointer;font-weight:700}
 .intro li{font-size:.9rem;margin:3px 0}
 .help h3{margin:14px 0 4px}
 .help p,.help li{font-size:.9rem;margin:3px 0}
+.help .notice{margin:6px 0}.help ol{margin:4px 0;padding-left:1.4em}
 .stat{margin:0 0 8px;font-size:.85rem}
 .ack{color:var(--muted);margin-left:4px}
 .ack.ok{color:var(--good)}
@@ -330,9 +331,13 @@ function viewHelp(){
   <p>ゲームでメダルを贈ったら、アプリのメダルの横の「贈った」を押して記録します。自分の枚数が減り、相手の枚数が増えます。</p>
   <h3>4. 受け取ったとき</h3>
   <p>ゲームで受け取りを確かめたら、「交換履歴」の「受け取りを確認」を押します。アプリを開いたときの「前回から…受け取りました」の表示からも押せます。</p>
-  <h3>5. 状況の表示</h3>
+  <h3>5. 重複して受け取ったとき</h3>
+  <div class="notice warn"><p>同じメダルを2人から同時に受け取るなど、メダルが重複することがあります。その場合は、次の手順で戻してください。</p>
+  <ol><li>ゲーム内で、重複した1枚を後から贈ってくれた方に贈り返します。</li><li>自分の「メダル登録」で、そのメダルの枚数を1枚減らします。</li><li>戻ってきた方は、「メダル登録」で枚数を1枚増やします。</li></ol>
+  <p>贈り返した分は、交換履歴には記録されません。「贈った」ボタンは、相手が持っていないメダルだけが対象なので、返すときは使いません。</p></div>
+  <h3>6. 状況の表示</h3>
   <ul><li>「✓ 成立しています」：贈りと受け取りが同じ枚数で、確認待ちもない状態</li><li>橙色の「あと○枚もらっていません／贈っていません」：差がある状態</li><li>「相手の確認待ち」：贈ったが、相手がまだ確認していない分</li></ul>
-  <h3>6. 名前・パスワードの変更</h3>
+  <h3>7. 名前・パスワードの変更</h3>
   <p>画面右上の自分の名前を押すと、アカウント画面で変更できます。</p></div>`;
 }
 function viewAccount(){
