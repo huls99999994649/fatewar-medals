@@ -295,14 +295,17 @@ function viewMatch(){
     });
     if(!blocks){
       const d=gap(st), rk=["pre","cla","leg"];
-      const rr=new Set([...st.rm].map(id=>(MEDALS.find(m=>m.id===id)||{}).r));
-      const srt=a=>a.slice().sort((p,q)=>(rr.has(q.r)-rr.has(p.r))||rk.indexOf(p.r)-rk.indexOf(q.r)||p.id-q.id);
+      const rr=new Set([...(d<0?st.rm:st.sm)].map(id=>(MEDALS.find(m=>m.id===id)||{}).r).filter(Boolean));
+      const same=a=>rr.size?a.filter(m=>rr.has(m.r)):a;
+      const rl=rk.filter(r=>rr.has(r)).map(r=>RAR_LABEL[r]).join("・");
+      const srt=a=>same(a).sort((p,q)=>rk.indexOf(p.r)-rk.indexOf(q.r)||p.id-q.id);
       if(d<0){
-        const cs=srt(x.give0).map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
+        const gl=srt(x.give0);
+        const cs=gl.map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
         const conf=pm?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
-        blocks=x.give0.length?`<div class="row"><span class="lab">お返しに贈れる(${x.give0.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。お返しは必須ではありません。</p>`:"";
-      }else if(d>0&&x.get0.length){
-        blocks=`<div class="row"><span class="lab">あなたがもらえる(${x.get0.length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
+        blocks=gl.length?`<div class="row"><span class="lab">お返しに贈れる${rl?`(${rl})`:""}(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。お返しは必須ではありません。</p>`:`<p class="sub" style="margin:8px 0 0">${rl?`同じレア度(${rl})で`:""}お返しに贈れる余りはありません。</p>`;
+      }else if(d>0&&srt(x.get0).length){
+        blocks=`<div class="row"><span class="lab">あなたがもらえる${rl?`(${rl})`:""}(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
       }
     }
     h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"マッチなし"}</span></header>
