@@ -154,7 +154,7 @@ THEMES.forEach(([tn,names],t)=>names.forEach((n,p)=>MEDALS.push({id:t*9+p+1,t,p,
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const qty=(q,id)=>(q&&q[id])|0;
-const ERR={"invalid gift":"確認できる記録がありません。","invalid guild code":"合言葉が違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
+const ERR={"invalid gift":"確認できる記録がありません。","invalid guild code":"ギルドコードが違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
 
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
@@ -368,12 +368,12 @@ function viewGuild(){
 }
 
 function viewGate(){
-  return `<section class="card intro"><h2>はじめての方へ</h2><ol><li>ギルドの合言葉を入れる(ギルドチャットで共有されたもの)</li><li>「はじめて使う方はこちら」で名前とパスワードを決める</li><li>2回目からは、同じ名前とパスワードでログインする</li></ol><p class="sub">詳しい使い方は、画面上部の「使い方」から読めます。</p></section>`+gateForm();
+  return `<section class="card intro"><h2>はじめての方へ</h2><ol><li>ギルドコードを入れる(ギルドチャットで共有されたもの)</li><li>「はじめて使う方はこちら」で名前とパスワードを決める</li><li>2回目からは、同じ名前とパスワードでログインする</li></ol><p class="sub">詳しい使い方は、画面上部の「使い方」から読めます。</p></section>`+gateForm();
 }
 function gateForm(){
   if(!code){
-    return `<section class="card"><h2>ギルドの合言葉</h2><p class="sub">ギルドチャットなどで共有された合言葉を入力してください。</p>
-      <form class="form" id="codeForm"><input id="codeInput" maxlength="20" placeholder="合言葉" autocomplete="off" autocapitalize="characters"><button class="btn" type="submit">次へ</button></form>${gateErr?`<p class="err">${esc(gateErr)}</p>`:""}</section>`;
+    return `<section class="card"><h2>ギルドコード</h2><p class="sub">ギルドチャットなどで共有されたギルドコードを入力してください。</p>
+      <form class="form" id="codeForm"><input id="codeInput" maxlength="20" placeholder="ギルドコード" autocomplete="off" autocapitalize="characters"><button class="btn" type="submit">次へ</button></form>${gateErr?`<p class="err">${esc(gateErr)}</p>`:""}</section>`;
   }
   const join=gateMode==="join";
   return `<section class="card"><h2>${join?"はじめて使う":"ログイン"}</h2>
