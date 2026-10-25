@@ -234,7 +234,7 @@ function statLine(st,oid){
   const d=gap(st);
   let t,c="";
   if(!st.sent&&!st.recv)t="まだやり取りなし";
-  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 釣り合っています`;c=" ok"}
+  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 成立しています`;c=" ok"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
   else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
   return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
@@ -245,7 +245,7 @@ function viewMatch(){
   const spareKinds=MEDALS.filter(m=>qty(me.q,m.id)>=2).length;
   const others=members.filter(m=>m.id!==ident.id).map(m=>({m,q:hold.get(m.id)||{}}));
   const list=others.map(x=>({...x,...matchWith(x.q)})).filter(x=>x.give.length||x.get.length)
-    .sort((a,b)=>b.swaps-a.swaps||(b.give.length+b.get.length)-(a.give.length+a.get.length));
+    .sort((a,b)=>(gap(pairStat(b.m.id))!==0)-(gap(pairStat(a.m.id))!==0)||b.swaps-a.swaps||(b.give.length+b.get.length)-(a.give.length+a.get.length));
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
