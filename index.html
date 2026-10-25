@@ -286,7 +286,7 @@ function viewMatch(){
       const pm=MEDALS.find(m=>m.id===pending.medal);
       conf=`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`;
     }
-    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`交換 ${x.swaps}組 成立`:"片方向のみ"}</span></header>
+    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"片方向のみ"}</span></header>
       ${statLine(st,x.m.id)}
       <div class="row"><span class="lab">あなたが贈れる(${x.give.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
       <div class="row"><span class="lab">あなたがもらえる(${x.get.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div></section>`;
