@@ -156,7 +156,7 @@ THEMES.forEach(([tn,names],t)=>names.forEach((n,p)=>MEDALS.push({id:t*9+p+1,t,p,
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const qty=(q,id)=>(q&&q[id])|0;
-const ERR={"invalid gift":"確認できる記録がありません。","invalid guild code":"ギルドコードが違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。"};
+const ERR={"invalid gift":"確認できる記録がありません。","invalid guild code":"ギルドコードが違います。","name taken":"その名前は使われています。別の名前にするか、パスワードでログインしてください。","invalid member":"名前またはパスワードが違います。","invalid password":"パスワードは4文字以上で入力してください。","not enough spare":"余り(2枚以上)がないため記録できません。","invalid name":"名前は1〜20文字で入力してください。","guild full":"登録人数が上限に達しました。ハルタソに連絡してください。","registration closed":"現在、新規登録を受け付けていません。ハルタソに連絡してください。"};
 
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
