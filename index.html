@@ -159,6 +159,7 @@ let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
 let members=[], hold=new Map(), gifts=[], me=null;
 let tab="match", filter="all", pending=null, gateErr="", gateMode="login", loaded=false, netErr=false;
 let hasPw; // undefined=未確認
+let lastSig="";
 let dirty=false, saving=false, timer=null, changed=new Set();
 
 async function rpc(fn,args){
@@ -175,16 +176,21 @@ async function load(){
   if(!code)return;
   try{
     const s=await rpc("fw_state",{p_code:code});
+    const sig=JSON.stringify([s.members,s.holdings,s.gifts]);
+    const skip=!!(ident&&me)&&loaded&&!netErr&&sig===lastSig;lastSig=sig;
     members=s.members;gifts=s.gifts;
     const h=new Map();members.forEach(m=>h.set(m.id,{}));
     s.holdings.forEach(([mid,med,q])=>{if(h.has(mid))h.get(mid)[med]=q});
     hold=h;netErr=false;
     if(ident){
-      if(!members.some(m=>m.id===ident.id)){store.del("fw_ident");ident=null;me=null}
+      const self=members.find(m=>m.id===ident.id);
+      if(self&&self.name!==ident.name){ident.name=self.name;store.set("fw_ident",ident)}
+      if(!self){store.del("fw_ident");ident=null;me=null}
       else if(!dirty&&!saving)me={name:ident.name,q:{...(h.get(ident.id)||{})}};
     }
     if(ident&&hasPw===undefined){try{hasPw=await rpc("fw_has_pw",{p_code:code,p_member:ident.id,p_secret:ident.secret})}catch(e){}}
     loaded=true;
+    if(skip&&ident&&me)return;
   }catch(e){
     if(e.raw==="invalid guild code"){store.del("fw_code");code=null;gateErr=e.message}
     else netErr=true;
