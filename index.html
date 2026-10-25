@@ -224,7 +224,7 @@ function matchWith(oq){
   const rs=["pre","cla","leg"].filter(r=>g0.some(m=>m.r===r)&&t0.some(m=>m.r===r));
   const give=g0.filter(m=>rs.includes(m.r)), get=t0.filter(m=>rs.includes(m.r));
   const swaps=rs.reduce((a,r)=>a+Math.min(give.filter(m=>m.r===r).length,get.filter(m=>m.r===r).length),0);
-  return {give,get,swaps};
+  return {give,get,swaps,give0:g0,get0:t0};
 }
 function chip(m,extra,qq,to,done){
   return `<span class="chip ${m.r}" title="${esc(m.theme)}／${RAR_LABEL[m.r]}"><span>${esc(m.name)}</span>${qq?`<small>余${qq-1}</small>`:""}${extra?`<em>${extra}</em>`:""}${done?`<small>${done}</small>`:""}${to?`<button class="gift" data-gift="${m.id}" data-to="${to}">贈った</button>`:""}</span>`;
@@ -293,6 +293,18 @@ function viewMatch(){
       <div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
       <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
     });
+    if(!blocks){
+      const d=gap(st), rk=["pre","cla","leg"];
+      const rr=new Set([...st.rm].map(id=>(MEDALS.find(m=>m.id===id)||{}).r));
+      const srt=a=>a.slice().sort((p,q)=>(rr.has(q.r)-rr.has(p.r))||rk.indexOf(p.r)-rk.indexOf(q.r)||p.id-q.id);
+      if(d<0){
+        const cs=srt(x.give0).map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
+        const conf=pm?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+        blocks=x.give0.length?`<div class="row"><span class="lab">お返しに贈れる(${x.give0.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。お返しは必須ではありません。</p>`:"";
+      }else if(d>0&&x.get0.length){
+        blocks=`<div class="row"><span class="lab">あなたがもらえる(${x.get0.length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
+      }
+    }
     h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"マッチなし"}</span></header>
       ${statLine(st,x.m.id)}${blocks||'<p class="sub" style="margin:8px 0 0">いま交換できるメダルはありません。</p>'}</section>`;
   });
