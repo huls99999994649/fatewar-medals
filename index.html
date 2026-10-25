@@ -178,7 +178,7 @@ function setStatus(t,err){const s=$("#status");s.textContent=t;s.className="stat
 async function load(){
   if(!code)return;
   try{
-    const s=await rpc("fw_state",{p_code:code});
+    const s=await rpc("fw_state",ident?{p_code:code,p_member:ident.id,p_secret:ident.secret}:{p_code:code});
     const sig=JSON.stringify([s.members,s.holdings,s.gifts]);
     const skip=!!(ident&&me)&&loaded&&!netErr&&sig===lastSig;lastSig=sig;
     members=s.members;gifts=s.gifts;
