@@ -236,10 +236,12 @@ function ackMark(g){
              :(g.ok?`<small class="ack ok">相手が確認済み</small>`:`<small class="ack wait">相手の確認待ち</small>`);
 }
 function recvBanner(un){
+  un=un.filter(g=>!g.ok);
+  if(!un.length)return "";
   const show=un.slice(-5).reverse();
   const li=show.map(g=>{const m=MEDALS.find(x=>x.id===g.medal);return `<li>${esc(nameOf(g.from))}さんから${esc(m?m.name:"メダル")}を${g.qty}枚受け取りました ${ackMark(g)}</li>`}).join("");
   const more=un.length>show.length?`<p class="sub">ほか${un.length-show.length}件</p>`:"";
-  return `<div class="notice recv"><b>前回から</b><ul>${li}</ul>${more}<button class="btn" data-seen="1">確認した</button></div>`;
+  return `<div class="notice recv"><b>前回から</b><ul>${li}</ul>${more}<p class="sub">ゲームで受け取りを確認できたら、各行の「受け取りを確認」を押してください。</p><button class="btn" data-seen="1">閉じる</button></div>`;
 }
 
 function pairStat(oid){
@@ -259,7 +261,7 @@ function statLine(st,oid){
   else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
   else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
-  t+=(st.sp?`<br>相手の確認待ち ${st.sp}枚`:"")+(st.rp?`<br><strong>あなたの確認待ち ${st.rp}枚</strong>`:"");
+  t+=(st.sp?`<br>相手の確認待ち ${st.sp}枚<small class="sub">（相手がゲームで受け取りを確認すると「確認済み」に変わります）</small>`:"")+(st.rp?`<br><strong>あなたの確認待ち ${st.rp}枚</strong>`:"");
   return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
 }
 function viewMatch(){
