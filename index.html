@@ -274,7 +274,7 @@ function viewMatch(){
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
-  h+=`<p class="notice">受け渡しはゲーム内の「贈る」「援助要請」で行います。贈ったら「贈った」を押すと、あなたの枚数が減り、相手の枚数が増えます。「コンプ」は、そのメダルで相手(自分)のテーマが完成することを示します。交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
+  h+=`<p class="notice">・ゲーム内でメダルを贈った後に、このアプリで「贈った」を押してください。あなたの枚数が減り、相手の枚数が増えます。<br>・ゲーム内で受け取りを確認した後に、このアプリで「受け取りを確認」を押してください。<br>・「コンプ」は、そのメダルでテーマが完成することを示します。<br>・交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
   if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーがメダルを登録すると、ここに候補が出ます。</p>`;
   list.forEach(x=>{
     const st=pairStat(x.m.id);
