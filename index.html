@@ -115,6 +115,7 @@ details.card summary{cursor:pointer;font-weight:700}
 .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:.82rem;text-decoration:underline;cursor:pointer;padding:0}
 .log{font-size:.85rem;margin:0;padding:0;list-style:none}
 .log li{padding:4px 0;border-bottom:1px dashed var(--line)}
+.stat{margin:0 0 8px;font-size:.85rem}
 .recv{border-color:var(--accent)}
 .recv ul{margin:6px 0 10px;padding-left:1.2em}
 </style>
@@ -204,8 +205,8 @@ function matchWith(oq){
   const swaps=rs.reduce((a,r)=>a+Math.min(give.filter(m=>m.r===r).length,get.filter(m=>m.r===r).length),0);
   return {give,get,swaps};
 }
-function chip(m,extra,qq,to){
-  return `<span class="chip ${m.r}" title="${esc(m.theme)}／${RAR_LABEL[m.r]}"><span>${esc(m.name)}</span>${qq?`<small>余${qq-1}</small>`:""}${extra?`<em>${extra}</em>`:""}${to?`<button class="gift" data-gift="${m.id}" data-to="${to}">贈った</button>`:""}</span>`;
+function chip(m,extra,qq,to,done){
+  return `<span class="chip ${m.r}" title="${esc(m.theme)}／${RAR_LABEL[m.r]}"><span>${esc(m.name)}</span>${qq?`<small>余${qq-1}</small>`:""}${extra?`<em>${extra}</em>`:""}${done?`<small>${done}</small>`:""}${to?`<button class="gift" data-gift="${m.id}" data-to="${to}">贈った</button>`:""}</span>`;
 }
 const nameOf=id=>(members.find(m=>m.id===id)||{}).name||"不明";
 const maxGift=()=>gifts.reduce((a,g)=>Math.max(a,g.id),0);
@@ -217,6 +218,18 @@ function recvBanner(un){
   return `<div class="notice recv"><b>前回から</b><ul>${li}</ul>${more}<button class="btn" data-seen="1">確認した</button></div>`;
 }
 
+function pairStat(oid){
+  const st={sent:0,recv:0,sm:new Set(),rm:new Set()};
+  gifts.forEach(g=>{
+    if(g.from===ident.id&&g.to===oid){st.sent+=g.qty;st.sm.add(g.medal)}
+    else if(g.to===ident.id&&g.from===oid){st.recv+=g.qty;st.rm.add(g.medal)}
+  });
+  return st;
+}
+function statLine(st,oid){
+  const t=!st.sent&&!st.recv?"まだやり取りなし":st.sent&&!st.recv?`あなたは贈り済み(${st.sent}枚)／まだ受け取っていません`:!st.sent?`受け取り済み(${st.recv}枚)／まだ贈っていません`:`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;
+  return `<p class="stat"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
+}
 function viewMatch(){
   const miss=MEDALS.filter(m=>qty(me.q,m.id)===0);
   const spareTotal=MEDALS.reduce((a,m)=>a+Math.max(0,qty(me.q,m.id)-1),0);
@@ -230,14 +243,16 @@ function viewMatch(){
   h+=`<p class="notice">受け渡しはゲーム内の「贈る」「援助要請」で行います。贈ったら「贈った」を押すと、あなたの枚数が減り、相手の枚数が増えます。「コンプ」は、そのメダルで相手(自分)のテーマが完成することを示します。交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
   if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーがメダルを登録すると、ここに候補が出ます。</p>`;
   list.forEach(x=>{
-    const give=x.give.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id)).join("");
-    const get=x.get.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id))).join("");
+    const st=pairStat(x.m.id);
+    const give=x.give.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
+    const get=x.get.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
     let conf="";
     if(pending&&pending.to===x.m.id){
       const pm=MEDALS.find(m=>m.id===pending.medal);
       conf=`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`;
     }
     h+=`<section class="card"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`交換 ${x.swaps}組 成立`:"片方向のみ"}</span></header>
+      ${statLine(st,x.m.id)}
       <div class="row"><span class="lab">あなたが贈れる(${x.give.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
       <div class="row"><span class="lab">あなたがもらえる(${x.get.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div></section>`;
   });
@@ -292,7 +307,7 @@ function viewGuild(){
   let h=`<h2>交換履歴(相手ごと・新しい順)</h2>`;
   if(!groups.size)h+=`<p class="sub">まだありません。</p>`;
   groups.forEach(x=>{
-    h+=`<section class="card"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header><ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
+    h+=`<section class="card" id="h_${x.o}"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header><ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
   });
   h+=`<h2 style="margin-top:18px">ギルドのメンバー</h2>`+tb;
   return h;
@@ -326,6 +341,7 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
   if(d.tab){tab=d.tab;pending=null;render();return}
+  if(d.hist){tab="guild";pending=null;render();const el=document.getElementById("h_"+d.hist);if(el)el.scrollIntoView({block:"start"});return}
   if(d.filter){filter=d.filter;render();return}
   if(d.mode){gateMode=d.mode;gateErr="";render();return}
   if(d.logout){store.del("fw_ident");ident=null;me=null;hasPw=undefined;gateErr="";render();return}
