@@ -121,15 +121,21 @@ begin
   return v;
 end $$;
 
--- 新規参加(名前+パスワード)
+-- 新規参加(名前+パスワード)。人数の上限と受付の締め切りに対応。
+--   settings の max_members(既定30) / join_open('false' で新規参加を締め切る)
 create or replace function public.fw_join(p_code text, p_name text, p_password text)
 returns json language plpgsql security definer set search_path to '' as $$
-declare v_name text := btrim(p_name); m record;
+declare v_name text := btrim(p_name); m record; v_max int; v_open text;
 begin
   perform "03_fatewar_medals".check_code(p_code);
   if v_name is null or char_length(v_name) not between 1 and 20 then raise exception 'invalid name'; end if;
   if p_password is null or char_length(p_password) < 4 or char_length(p_password) > 64 then raise exception 'invalid password'; end if;
   if exists (select 1 from "03_fatewar_medals".members where name = v_name) then raise exception 'name taken'; end if;
+  perform pg_advisory_xact_lock(hashtext('fw_join'));   -- 同時に参加が重なっても上限を超えないよう順番に処理
+  select value into v_open from "03_fatewar_medals".settings where key = 'join_open';
+  if coalesce(lower(btrim(v_open)), 'true') = 'false' then raise exception 'registration closed'; end if;
+  select coalesce((select nullif(btrim(value), '')::int from "03_fatewar_medals".settings where key = 'max_members'), 30) into v_max;
+  if (select count(*) from "03_fatewar_medals".members) >= v_max then raise exception 'guild full'; end if;
   insert into "03_fatewar_medals".members (name, pw_hash) values (v_name, extensions.crypt(p_password, extensions.gen_salt('bf')))
     returning id, secret into m;
   return json_build_object('member_id', m.id, 'secret', m.secret, 'name', v_name);
@@ -252,4 +258,8 @@ grant execute on function public.fw_state(text,uuid,uuid), public.fw_ver(text,uu
 
 -- ギルドコードは次のように設定します(英数字の大文字。値は自分で決める):
 --   insert into "03_fatewar_medals".settings(key,value) values ('guild_code','ここに合言葉');
+-- 人数の上限(既定30)と、新規参加の受付(true=受付中 / false=締め切り)も settings で変えられます:
+--   insert into "03_fatewar_medals".settings(key,value) values ('max_members','30'),('join_open','true');
+--   update "03_fatewar_medals".settings set value='50' where key='max_members';   -- 上限を変える
+--   update "03_fatewar_medals".settings set value='false' where key='join_open';   -- 新規参加を締め切る
 -- ※ Supabase の「Exposed schemas」に 03_fatewar_medals を追加する必要はありません(関数が public にあるため)。
