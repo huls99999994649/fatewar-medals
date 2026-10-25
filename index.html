@@ -274,7 +274,7 @@ function viewMatch(){
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
-  h+=`<p class="notice">・ゲーム内でメダルを贈った後に、このアプリで「贈った」を押してください。あなたの枚数が減り、相手の枚数が増えます。<br>・ゲーム内で受け取りを確認した後に、このアプリで「受け取りを確認」を押してください。<br>・「コンプ」は、そのメダルでテーマが完成することを示します。<br>・交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
+  h+=`<p class="notice">・ゲーム内でメダルを贈った後に、このアプリで「贈った」を押してください。あなたの枚数が減り、相手の枚数が増えます。<br>・ゲーム内で受け取りを確認した後に、このアプリで「受け取りを確認」を押してください。<br>・交換は同じレア度同士(プレシャス⇔プレシャスなど)だけを候補にしています。</p>`;
   if(!list.length)return h+`<p class="empty">いま交換できる相手はいません。他のメンバーがメダルを登録すると、ここに候補が出ます。</p>`;
   list.forEach(x=>{
     const st=pairStat(x.m.id);
@@ -295,16 +295,15 @@ function viewMatch(){
 
 function viewMine(){
   const kinds=MEDALS.filter(m=>qty(me.q,m.id)>0).length;
-  let h=`<div class="summary"><span>所持 <b>${kinds}</b>/81種</span><span>有効化したテーマ <b>${THEMES.filter((_,t)=>missingIn(me.q,t)===0).length}</b>/9</span></div>`;
+  let h=`<div class="summary"><span>所持 <b>${kinds}</b>/81種</span><span>完成したテーマ <b>${THEMES.filter((_,t)=>missingIn(me.q,t)===0).length}</b>/9</span></div>`;
   h+=`<div class="legend"><span><i style="color:var(--r-pre)"></i>プレシャス</span><span><i style="color:var(--r-cla)"></i>クラシック</span><span><i style="color:var(--r-leg)"></i>レジェンド</span></div>`;
-  h+=`<div class="legend"><span style="background:color-mix(in srgb,var(--good) 14%,transparent);padding:0 6px;border-radius:3px">所持</span><span style="background:color-mix(in srgb,var(--accent) 28%,transparent);padding:0 6px;border-radius:3px">余りあり(2枚以上)</span><span>白＝未所持</span></div>`;
   h+=`<div class="filters">${[["all","すべて"],["spare","余りあり"],["zero","未所持"]].map(([k,l])=>`<button data-filter="${k}" aria-pressed="${filter===k}">${l}</button>`).join("")}</div>`;
   THEMES.forEach(([tn],t)=>{
     const ms=MEDALS.filter(m=>m.t===t);
     const have=ms.filter(m=>qty(me.q,m.id)>0).length;
     const shown=ms.filter(m=>{const q=qty(me.q,m.id);return filter==="all"||(filter==="spare"&&q>=2)||(filter==="zero"&&q===0)});
     if(!shown.length)return;
-    h+=`<section class="theme"><h3>${esc(tn)}<span class="${have===9?"done":""}">${have===9?"有効化済み ":""}${have}/9</span></h3>`;
+    h+=`<section class="theme"><h3>${esc(tn)}<span class="${have===9?"done":""}">${have===9?"完成 ":""}${have}/9</span></h3>`;
     shown.forEach(m=>{
       const q=qty(me.q,m.id);
       h+=`<div class="m ${m.r} ${q?"":"zero"} ${q>=2?"rowspare":q?"rowhave":""}"><i class="dot"></i><span class="nm">${esc(m.name)}</span><span class="spare">${q>=2?`余り${q-1}`:""}</span>
@@ -326,7 +325,7 @@ function viewHelp(){
   <p>「余り」は、1枚を手元に残したうえで贈れる枚数です。</p>
   <h3>2. マッチ</h3>
   <p>自分の余りと、相手の欲しいメダルが合う相手が出ます。交換は、同じレア度(プレシャス・クラシック・レジェンド)同士だけが候補です。</p>
-  <ul><li>「あなたが贈れる」：自分の余りで、相手が持っていないメダル</li><li>「あなたがもらえる」：相手の余りで、自分が持っていないメダル</li><li>「コンプ」：そのメダルでテーマ(9種)が揃い、有効化できることを示します</li></ul>
+  <ul><li>「あなたが贈れる」：自分の余りで、相手が持っていないメダル</li><li>「あなたがもらえる」：相手の余りで、自分が持っていないメダル</li><li>「コンプ」：そのメダルでテーマ(9種)が揃うことを示します</li></ul>
   <h3>3. 贈ったとき</h3>
   <p>ゲームでメダルを贈ったら、アプリのメダルの横の「贈った」を押して記録します。自分の枚数が減り、相手の枚数が増えます。</p>
   <h3>4. 受け取ったとき</h3>
@@ -346,7 +345,7 @@ function viewAccount(){
 function viewGuild(){
   const rows=members.map(m=>({m,q:m.id===ident.id?me.q:(hold.get(m.id)||{})}))
     .sort((a,b)=>MEDALS.filter(x=>qty(b.q,x.id)>0).length-MEDALS.filter(x=>qty(a.q,x.id)>0).length);
-  let tb=`<div class="tablebox"><table><thead><tr><th>メンバー</th><th class="n">所持種</th><th class="n">有効テーマ</th><th class="n">余り枚数</th></tr></thead><tbody>`;
+  let tb=`<div class="tablebox"><table><thead><tr><th>メンバー</th><th class="n">所持種</th><th class="n">完成テーマ</th><th class="n">余り枚数</th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const kinds=MEDALS.filter(m=>qty(r.q,m.id)>0).length;
     const th=THEMES.filter((_,t)=>missingIn(r.q,t)===0).length;
