@@ -1,0 +1,255 @@
+-- 恐怖のギフト交換所(メダル交換マッチングアプリ) データベース構成
+-- Supabase の SQL Editor に貼り付けて実行すると、同じ構成を作れます。
+-- 注意: ギルドコード・メンバー情報・パスワードなどの実データはこのファイルに含めていません。
+
+create extension if not exists pgcrypto with schema extensions;
+create schema if not exists "03_fatewar_medals";
+
+-- ---------- 表 ----------
+create table "03_fatewar_medals".settings (
+  key text primary key,
+  value text not null
+);
+
+create table "03_fatewar_medals".themes (
+  theme_no smallint primary key,
+  name text not null
+);
+
+create table "03_fatewar_medals".medals (
+  id smallint primary key,
+  theme_no smallint not null references "03_fatewar_medals".themes(theme_no),
+  pos smallint not null,
+  name text not null,
+  rarity text not null check (rarity in ('precious','classic','legend')),
+  unique (theme_no, pos)
+);
+
+create table "03_fatewar_medals".members (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  secret uuid not null default gen_random_uuid(),   -- 端末に保存される合言葉(画面には出さない)
+  created_at timestamptz not null default now(),
+  pw_hash text                                      -- パスワードのハッシュ(bcrypt)
+);
+
+create table "03_fatewar_medals".holdings (
+  member_id uuid not null references "03_fatewar_medals".members(id) on delete cascade,
+  medal_id smallint not null references "03_fatewar_medals".medals(id),
+  qty smallint not null default 0 check (qty >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (member_id, medal_id)
+);
+
+create table "03_fatewar_medals".gifts (
+  id bigserial primary key,
+  from_member uuid not null references "03_fatewar_medals".members(id),
+  to_member uuid not null references "03_fatewar_medals".members(id),
+  medal_id smallint not null references "03_fatewar_medals".medals(id),
+  qty smallint not null default 1 check (qty > 0),
+  created_at timestamptz not null default now(),
+  confirmed_at timestamptz                          -- 受け取り側が確認した時刻
+);
+
+-- 表への直接アクセスは禁止(ポリシーなし)。画面は下の関数(RPC)だけを使います。
+alter table "03_fatewar_medals".settings enable row level security;
+alter table "03_fatewar_medals".themes   enable row level security;
+alter table "03_fatewar_medals".medals   enable row level security;
+alter table "03_fatewar_medals".members  enable row level security;
+alter table "03_fatewar_medals".holdings enable row level security;
+alter table "03_fatewar_medals".gifts    enable row level security;
+
+-- ---------- 内部用の確認関数 ----------
+create or replace function "03_fatewar_medals".check_code(p_code text)
+returns void language plpgsql security definer set search_path to '' as $$
+begin
+  if p_code is null or not exists (
+    select 1 from "03_fatewar_medals".settings
+    where key = 'guild_code' and value = upper(btrim(p_code))
+  ) then
+    raise exception 'invalid guild code' using errcode = '28000';
+  end if;
+end $$;
+
+create or replace function "03_fatewar_medals".check_member(p_member uuid, p_secret uuid)
+returns void language plpgsql security definer set search_path to '' as $$
+begin
+  if p_member is null or p_secret is null or not exists (
+    select 1 from "03_fatewar_medals".members where id = p_member and secret = p_secret
+  ) then
+    raise exception 'invalid member' using errcode = '28000';
+  end if;
+end $$;
+
+-- ---------- 画面から呼ぶ関数(RPC) ----------
+-- 全体の状態を返す(自分に関係する交換履歴だけを含む)
+create or replace function public.fw_state(p_code text, p_member uuid default null, p_secret uuid default null)
+returns json language plpgsql security definer set search_path to '' as $$
+declare r json; ok boolean := false;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  if p_member is not null and p_secret is not null then
+    perform "03_fatewar_medals".check_member(p_member, p_secret);
+    ok := true;
+  end if;
+  select json_build_object(
+    'themes', (select coalesce(json_agg(json_build_object('no', theme_no, 'name', name) order by theme_no), '[]'::json) from "03_fatewar_medals".themes),
+    'medals', (select coalesce(json_agg(json_build_object('id', id, 'theme', theme_no, 'pos', pos, 'name', name, 'rarity', rarity) order by id), '[]'::json) from "03_fatewar_medals".medals),
+    'members', (select coalesce(json_agg(json_build_object('id', id, 'name', name) order by created_at), '[]'::json) from "03_fatewar_medals".members),
+    'holdings', (select coalesce(json_agg(json_build_array(member_id, medal_id, qty)), '[]'::json) from "03_fatewar_medals".holdings where qty > 0),
+    'gifts', (select coalesce(json_agg(x order by x.at desc), '[]'::json)
+              from (select g.id, g.from_member as "from", g.to_member as "to", g.medal_id as medal, g.qty, g.created_at as at, (g.confirmed_at is not null) as ok
+                    from "03_fatewar_medals".gifts g
+                    where ok and (g.from_member = p_member or g.to_member = p_member)
+                    order by g.created_at desc limit 300) x)
+  ) into r;
+  return r;
+end $$;
+
+-- 更新確認用の軽い「版番号」(変わったときだけ画面が fw_state を取り直す)
+create or replace function public.fw_ver(p_code text, p_member uuid default null)
+returns text language plpgsql security definer set search_path to '' as $$
+declare v text;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  select md5(concat_ws('|',
+    (select count(*)::text||':'||coalesce(sum(qty),0)::text||':'||coalesce(max(updated_at)::text,'') from "03_fatewar_medals".holdings),
+    (select coalesce(string_agg(id::text||name, ',' order by id),'') from "03_fatewar_medals".members),
+    (select count(*)::text||':'||coalesce(max(id),0)::text||':'||coalesce(max(confirmed_at)::text,'')
+       from "03_fatewar_medals".gifts g where p_member is not null and (g.from_member=p_member or g.to_member=p_member))
+  )) into v;
+  return v;
+end $$;
+
+-- 新規参加(名前+パスワード)
+create or replace function public.fw_join(p_code text, p_name text, p_password text)
+returns json language plpgsql security definer set search_path to '' as $$
+declare v_name text := btrim(p_name); m record;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  if v_name is null or char_length(v_name) not between 1 and 20 then raise exception 'invalid name'; end if;
+  if p_password is null or char_length(p_password) < 4 or char_length(p_password) > 64 then raise exception 'invalid password'; end if;
+  if exists (select 1 from "03_fatewar_medals".members where name = v_name) then raise exception 'name taken'; end if;
+  insert into "03_fatewar_medals".members (name, pw_hash) values (v_name, extensions.crypt(p_password, extensions.gen_salt('bf')))
+    returning id, secret into m;
+  return json_build_object('member_id', m.id, 'secret', m.secret, 'name', v_name);
+end $$;
+
+-- ログイン(名前+パスワード。パスワード未設定の旧アカウントは合言葉で入れる)
+create or replace function public.fw_login(p_code text, p_name text, p_password text)
+returns json language plpgsql security definer set search_path to '' as $$
+declare m record; ok boolean;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  select id, name, secret, pw_hash into m from "03_fatewar_medals".members where name = btrim(p_name);
+  if not found then raise exception 'invalid member' using errcode = '28000'; end if;
+  if m.pw_hash is null then ok := (m.secret::text = btrim(coalesce(p_password,'')));
+  else ok := (m.pw_hash = extensions.crypt(coalesce(p_password,''), m.pw_hash)); end if;
+  if not ok then raise exception 'invalid member' using errcode = '28000'; end if;
+  return json_build_object('member_id', m.id, 'name', m.name, 'secret', m.secret, 'has_pw', m.pw_hash is not null);
+end $$;
+
+create or replace function public.fw_has_pw(p_code text, p_member uuid, p_secret uuid)
+returns boolean language plpgsql security definer set search_path to '' as $$
+declare v boolean;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  select pw_hash is not null into v from "03_fatewar_medals".members where id = p_member and secret = p_secret;
+  if v is null then raise exception 'invalid member' using errcode = '28000'; end if;
+  return v;
+end $$;
+
+create or replace function public.fw_set_password(p_code text, p_member uuid, p_secret uuid, p_password text)
+returns boolean language plpgsql security definer set search_path to '' as $$
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  if p_password is null or char_length(p_password) < 4 or char_length(p_password) > 64 then raise exception 'invalid password'; end if;
+  update "03_fatewar_medals".members set pw_hash = extensions.crypt(p_password, extensions.gen_salt('bf'))
+   where id = p_member and secret = p_secret;
+  if not found then raise exception 'invalid member' using errcode = '28000'; end if;
+  return true;
+end $$;
+
+create or replace function public.fw_rename(p_code text, p_member uuid, p_secret uuid, p_name text)
+returns json language plpgsql security definer set search_path to '' as $$
+declare v_name text := btrim(p_name);
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  if v_name is null or char_length(v_name) not between 1 and 20 then raise exception 'invalid name'; end if;
+  if not exists (select 1 from "03_fatewar_medals".members where id = p_member and secret = p_secret) then
+    raise exception 'invalid member' using errcode = '28000';
+  end if;
+  if exists (select 1 from "03_fatewar_medals".members where name = v_name and id <> p_member) then raise exception 'name taken'; end if;
+  update "03_fatewar_medals".members set name = v_name where id = p_member;
+  return json_build_object('name', v_name);
+end $$;
+
+-- メダルの所持枚数を登録(0〜999枚)
+create or replace function public.fw_set_qty(p_code text, p_member uuid, p_secret uuid, p_items jsonb)
+returns integer language plpgsql security definer set search_path to '' as $$
+declare it jsonb; n integer := 0;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  perform "03_fatewar_medals".check_member(p_member, p_secret);
+  for it in select * from jsonb_array_elements(p_items) loop
+    insert into "03_fatewar_medals".holdings (member_id, medal_id, qty, updated_at)
+    values (p_member, (it->>'medal_id')::smallint,
+            greatest(0, least(999, (it->>'qty')::int))::smallint, now())
+    on conflict (member_id, medal_id)
+    do update set qty = excluded.qty, updated_at = now();
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+
+-- 「贈った」を記録(贈る側が最低1枚残る範囲。相手の枚数が増え、自分の枚数が減る)
+create or replace function public.fw_gift(p_code text, p_member uuid, p_secret uuid, p_to uuid, p_medal integer, p_qty integer default 1)
+returns json language plpgsql security definer set search_path to '' as $$
+declare have int;
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  perform "03_fatewar_medals".check_member(p_member, p_secret);
+  if p_to = p_member then raise exception 'cannot gift to self'; end if;
+  if p_qty is null or p_qty < 1 then raise exception 'invalid qty'; end if;
+  if not exists (select 1 from "03_fatewar_medals".members where id = p_to) then raise exception 'unknown recipient'; end if;
+  select qty into have from "03_fatewar_medals".holdings
+   where member_id = p_member and medal_id = p_medal for update;
+  if coalesce(have, 0) - p_qty < 1 then raise exception 'not enough spare'; end if;
+  update "03_fatewar_medals".holdings set qty = qty - p_qty, updated_at = now()
+   where member_id = p_member and medal_id = p_medal;
+  insert into "03_fatewar_medals".holdings as h (member_id, medal_id, qty, updated_at)
+  values (p_to, p_medal, p_qty, now())
+  on conflict (member_id, medal_id)
+  do update set qty = h.qty + excluded.qty, updated_at = now();
+  insert into "03_fatewar_medals".gifts (from_member, to_member, medal_id, qty)
+  values (p_member, p_to, p_medal, p_qty);
+  return json_build_object('ok', true);
+end $$;
+
+-- 「受け取りを確認」(記録のみ。枚数は変わらない)
+create or replace function public.fw_confirm(p_code text, p_member uuid, p_secret uuid, p_gift bigint)
+returns boolean language plpgsql security definer set search_path to '' as $$
+begin
+  perform "03_fatewar_medals".check_code(p_code);
+  if not exists (select 1 from "03_fatewar_medals".members where id = p_member and secret = p_secret) then
+    raise exception 'invalid member' using errcode = '28000';
+  end if;
+  update "03_fatewar_medals".gifts set confirmed_at = coalesce(confirmed_at, now())
+   where id = p_gift and to_member = p_member;
+  if not found then raise exception 'invalid gift'; end if;
+  return true;
+end $$;
+
+-- 画面(匿名キー)から呼べるのは fw_* だけ
+revoke all on function public.fw_state(text,uuid,uuid), public.fw_ver(text,uuid), public.fw_join(text,text,text),
+  public.fw_login(text,text,text), public.fw_has_pw(text,uuid,uuid), public.fw_set_password(text,uuid,uuid,text),
+  public.fw_rename(text,uuid,uuid,text), public.fw_set_qty(text,uuid,uuid,jsonb),
+  public.fw_gift(text,uuid,uuid,uuid,integer,integer), public.fw_confirm(text,uuid,uuid,bigint) from public;
+grant execute on function public.fw_state(text,uuid,uuid), public.fw_ver(text,uuid), public.fw_join(text,text,text),
+  public.fw_login(text,text,text), public.fw_has_pw(text,uuid,uuid), public.fw_set_password(text,uuid,uuid,text),
+  public.fw_rename(text,uuid,uuid,text), public.fw_set_qty(text,uuid,uuid,jsonb),
+  public.fw_gift(text,uuid,uuid,uuid,integer,integer), public.fw_confirm(text,uuid,uuid,bigint) to anon, authenticated;
+
+-- ギルドコードは次のように設定します(英数字の大文字。値は自分で決める):
+--   insert into "03_fatewar_medals".settings(key,value) values ('guild_code','ここに合言葉');
+-- ※ Supabase の「Exposed schemas」に 03_fatewar_medals を追加する必要はありません(関数が public にあるため)。
