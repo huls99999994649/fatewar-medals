@@ -90,7 +90,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
       <h1>恐怖のギフト交換所</h1>
       <p class="sub">Fate War ハロウィンイベント用。ギルドの余りメダルと欲しいメダルを突き合わせます。</p>
     </div>
-    <div style="text-align:right"><div class="status" id="status" role="status"></div><button class="linkbtn" id="whoBtn" data-tab="account" hidden></button></div>
+    <div style="text-align:right"><div class="status" id="status" role="status"></div><button class="linkbtn" data-tab="help">？使い方</button> <button class="linkbtn" id="whoBtn" data-tab="account" hidden></button></div>
   </div>
   <div id="notice"></div>
   <div class="tabs" id="tabs" role="tablist">
@@ -115,6 +115,11 @@ details.card summary{cursor:pointer;font-weight:700}
 .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:.82rem;text-decoration:underline;cursor:pointer;padding:0}
 .log{font-size:.85rem;margin:0;padding:0;list-style:none}
 .log li{padding:4px 0;border-bottom:1px dashed var(--line)}
+.m{padding-inline:8px;border-radius:4px}
+.m.rowhave{background:color-mix(in srgb,var(--good) 14%,transparent)}
+.m.rowspare{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+.help h3{margin:14px 0 4px}
+.help p,.help li{font-size:.9rem;margin:3px 0}
 .stat{margin:0 0 8px;font-size:.85rem}
 .ack{color:var(--muted);margin-left:4px}
 .ack.ok{color:var(--good)}
@@ -282,6 +287,7 @@ function viewMine(){
   const kinds=MEDALS.filter(m=>qty(me.q,m.id)>0).length;
   let h=`<div class="summary"><span>所持 <b>${kinds}</b>/81種</span><span>有効化したテーマ <b>${THEMES.filter((_,t)=>missingIn(me.q,t)===0).length}</b>/9</span></div>`;
   h+=`<div class="legend"><span><i style="color:var(--r-pre)"></i>プレシャス</span><span><i style="color:var(--r-cla)"></i>クラシック</span><span><i style="color:var(--r-leg)"></i>レジェンド</span></div>`;
+  h+=`<div class="legend"><span style="background:color-mix(in srgb,var(--good) 14%,transparent);padding:0 6px;border-radius:3px">所持</span><span style="background:color-mix(in srgb,var(--accent) 28%,transparent);padding:0 6px;border-radius:3px">余りあり(2枚以上)</span><span>白＝未所持</span></div>`;
   h+=`<div class="filters">${[["all","すべて"],["spare","余りあり"],["zero","未所持"]].map(([k,l])=>`<button data-filter="${k}" aria-pressed="${filter===k}">${l}</button>`).join("")}</div>`;
   THEMES.forEach(([tn],t)=>{
     const ms=MEDALS.filter(m=>m.t===t);
@@ -291,7 +297,7 @@ function viewMine(){
     h+=`<section class="theme"><h3>${esc(tn)}<span class="${have===9?"done":""}">${have===9?"有効化済み ":""}${have}/9</span></h3>`;
     shown.forEach(m=>{
       const q=qty(me.q,m.id);
-      h+=`<div class="m ${m.r} ${q?"":"zero"}"><i class="dot"></i><span class="nm">${esc(m.name)}</span><span class="spare">${q>=2?`余り${q-1}`:""}</span>
+      h+=`<div class="m ${m.r} ${q?"":"zero"} ${q>=2?"rowspare":q?"rowhave":""}"><i class="dot"></i><span class="nm">${esc(m.name)}</span><span class="spare">${q>=2?`余り${q-1}`:""}</span>
         <span class="step"><button data-d="-1" data-id="${m.id}" aria-label="${esc(m.name)}を1減らす" ${q?"":"disabled"}>−</button><span class="q">${q}</span><button data-d="1" data-id="${m.id}" aria-label="${esc(m.name)}を1増やす">＋</button></span></div>`;
     });
     h+=`</section>`;
@@ -300,6 +306,28 @@ function viewMine(){
 }
 
 const pwForm=(label,btn)=>`<form class="form" id="pwForm"><input id="pwInput" type="password" minlength="4" maxlength="64" placeholder="${label}(4文字以上)" autocomplete="new-password"><button class="btn" type="submit">${btn}</button></form>`;
+function viewHelp(){
+  return `<p style="margin:0 0 12px"><button class="linkbtn" data-tab="match">← 戻る</button></p>
+  <div class="help"><h2>使い方</h2>
+  <p class="sub">Fate War「恐怖のギフトボックス」のメダルを、ギルドのメンバー同士で交換するための道具です。</p>
+  <h3>1. はじめに</h3>
+  <p>ギルドの合言葉を入れ、名前とパスワードでログインします。初めての方は「はじめて使う方はこちら」から名前とパスワードを決めます。別のスマホやPCでも、同じ名前とパスワードで入れます。</p>
+  <h3>2. メダル登録</h3>
+  <p>持っているメダルの枚数を「＋」「−」で登録します。自動で保存されます。</p>
+  <ul><li>背景が緑の行：持っているメダル</li><li>背景が橙の行：余り(2枚以上)があるメダル</li><li>色なし：まだ持っていないメダル</li></ul>
+  <p>「余り」は、1枚を手元に残したうえで贈れる枚数です。</p>
+  <h3>3. マッチ</h3>
+  <p>自分の余りと、相手の欲しいメダルが合う相手が出ます。交換は、同じレア度(プレシャス・クラシック・レジェンド)同士だけが候補です。</p>
+  <ul><li>「あなたが贈れる」：自分の余りで、相手が持っていないメダル</li><li>「あなたがもらえる」：相手の余りで、自分が持っていないメダル</li><li>「コンプ」：そのメダルでテーマ(9種)が揃い、有効化できることを示します</li></ul>
+  <h3>4. 贈ったとき</h3>
+  <p>ゲームでメダルを贈ったら、アプリのメダルの横の「贈った」を押して記録します。自分の枚数が減り、相手の枚数が増えます。</p>
+  <h3>5. 受け取ったとき</h3>
+  <p>ゲームで受け取りを確かめたら、「交換履歴」の「受け取りを確認」を押します。アプリを開いたときの「前回から…受け取りました」の表示からも押せます。</p>
+  <h3>6. 状況の表示</h3>
+  <ul><li>「✓ 成立しています」：贈りと受け取りが同じ枚数で、確認待ちもない状態</li><li>橙色の「あと○枚もらっていません／贈っていません」：差がある状態</li><li>「相手の確認待ち」：贈ったが、相手がまだ確認していない分</li></ul>
+  <h3>7. 名前・パスワードの変更</h3>
+  <p>画面右上の自分の名前を押すと、アカウント画面で変更できます。</p></div>`;
+}
 function viewAccount(){
   return `<p style="margin:0 0 12px"><button class="linkbtn" data-tab="match">← 戻る</button></p>
   <section class="card"><h2>アカウント</h2><p class="sub">別のスマホやPCでも、同じ名前とパスワードでログインできます。名前を変えたら、次からは新しい名前でログインします。</p></section>
@@ -353,6 +381,7 @@ function render(){
   const w=$("#whoBtn");w.hidden=!ready;if(ready)w.textContent=ident.name+"さん";
   const un=ready?unread():[];
   $("#notice").innerHTML=(netErr?`<p class="notice warn">サーバーに接続できません。通信を確認してください。</p>`:"")+(ready&&hasPw===false&&tab!=="account"?`<div class="notice warn"><b>パスワードを設定してください</b><p class="sub">別の端末でログインするときに使います。</p>${pwForm("パスワード","設定する")}</div>`:"")+(un.length?recvBanner(un):"");
+  if(tab==="help"){$("#view").innerHTML=viewHelp();return}
   if(!ready){$("#view").innerHTML=(code&&!loaded&&!netErr&&ident)?`<p class="empty">読み込み中…</p>`:viewGate();return}
   $("#view").innerHTML=tab==="match"?viewMatch():tab==="mine"?viewMine():tab==="account"?viewAccount():viewGuild();
 }
