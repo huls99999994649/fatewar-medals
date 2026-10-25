@@ -262,7 +262,7 @@ function statLine(st,oid){
   else if(d===0&&!st.sp&&!st.rp){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 交換済み`;c=" ok"}
   else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
-  else{t=`受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>差は${-d}枚</strong>（お返しは任意です）`;c=" gap"}
+  else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
   t+=(st.sp?`<br>相手の確認待ち ${st.sp}枚<small class="sub">（相手がゲームで受け取りを確認すると「確認済み」に変わります）</small>`:"")+(st.rp?`<br><strong>あなたの確認待ち ${st.rp}枚</strong>`:"");
   return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
 }
@@ -303,7 +303,7 @@ function viewMatch(){
         const gl=srt(x.give0);
         const cs=gl.map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
         const conf=pm?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
-        blocks=gl.length?`<div class="row"><span class="lab">お返しに贈れる${rl?`(${rl})`:""}(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。お返しは必須ではありません。</p>`:`<p class="sub" style="margin:8px 0 0">${rl?`同じレア度(${rl})で`:""}お返しに贈れる余りはありません。</p>`;
+        blocks=gl.length?`<div class="row"><span class="lab">お返しに贈れる${rl?`(${rl})`:""}(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。この中から、あと${-d}枚贈ってください${gl.length<-d?`(候補は${gl.length}枚です)`:""}。</p>`:`<p class="sub" style="margin:8px 0 0">${rl?`同じレア度(${rl})で`:""}お返しに贈れる余りはありません。</p>`;
       }else if(d>0&&srt(x.get0).length){
         blocks=`<div class="row"><span class="lab">あなたがもらえる${rl?`(${rl})`:""}(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
       }
@@ -356,7 +356,7 @@ function viewHelp(){
   <ol><li>ゲーム内で、重複した1枚を後から贈ってくれた方に贈り返します。</li><li>「メダル登録」でアプリ内で贈ったメダルの枚数を1枚減らしてください。</li><li>「メダル登録」でアプリ内で戻ってきたメダルの枚数を1枚増やしてください。</li></ol>
   <p>贈り返した分は、交換履歴には記録されません。「贈った」ボタンは、相手が持っていないメダルだけが対象なので、返すときは使いません。</p></div>
   <h3>6. 状況の表示</h3>
-  <ul><li>「✓ 交換済み」：贈りと受け取りが同じ枚数で、確認待ちもない状態</li><li>橙色の表示：贈りと受け取りの枚数に差がある状態(「あと○枚もらっていません」など。受け取りが多いときのお返しは任意です)</li><li>「相手の確認待ち」：贈ったが、相手がまだ確認していない分</li></ul>
+  <ul><li>「✓ 交換済み」：贈りと受け取りが同じ枚数で、確認待ちもない状態</li><li>橙色の「あと○枚もらっていません／贈っていません」：差がある状態</li><li>「相手の確認待ち」：贈ったが、相手がまだ確認していない分</li></ul>
   <h3>7. 名前・パスワードの変更</h3>
   <p>画面右上の自分の名前を押すと、アカウント画面で変更できます。</p></div>`;
 }
@@ -387,7 +387,7 @@ function viewGuild(){
   if(!groups.size)h+=`<p class="sub">まだありません。</p>`;
   groups.forEach(x=>{
     const dd=x.sent-x.recv;
-    h+=`<section class="card${dd?" diff":""}" id="h_${x.o}"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header>${dd>0?`<p class="stat gap">⚠ <strong>あと${dd}枚もらっていません</strong></p>`:dd<0?`<p class="stat gap"><strong>受け取りが${-dd}枚多い状態です</strong>（お返しは任意です）</p>`:""}<ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
+    h+=`<section class="card${dd?" diff":""}" id="h_${x.o}"><header><h3>${esc(nameOf(x.o))}</h3><span class="sub">贈った ${x.sent}枚 ／ 受け取った ${x.recv}枚　最終 ${fmt(x.last)}</span></header>${dd>0?`<p class="stat gap">⚠ <strong>あと${dd}枚もらっていません</strong></p>`:dd<0?`<p class="stat gap">⚠ <strong>あと${-dd}枚贈っていません</strong></p>`:""}<ul class="log">${x.list.slice(0,3).map(line).join("")}</ul>${x.list.length>3?`<details><summary class="sub">すべて見る(${x.list.length}件)</summary><ul class="log">${x.list.slice(3).map(line).join("")}</ul></details>`:""}</section>`;
   });
   h+=`<h2 style="margin-top:18px">ギルドのメンバー</h2>`+tb;
   return h;
