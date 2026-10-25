@@ -271,7 +271,7 @@ function viewMatch(){
   const spareTotal=MEDALS.reduce((a,m)=>a+Math.max(0,qty(me.q,m.id)-1),0);
   const spareKinds=MEDALS.filter(m=>qty(me.q,m.id)>=2).length;
   const others=members.filter(m=>m.id!==ident.id).map(m=>({m,q:hold.get(m.id)||{}}));
-  const list=others.map(x=>({...x,...matchWith(x.q)})).filter(x=>x.give.length||x.get.length)
+  const list=others.map(x=>({...x,...matchWith(x.q)})).filter(x=>{if(x.give.length||x.get.length)return true;const st=pairStat(x.m.id);return gap(st)!==0||st.sp>0||st.rp>0})
     .sort((a,b)=>(gap(pairStat(b.m.id))!==0)-(gap(pairStat(a.m.id))!==0)||b.swaps-a.swaps||(b.give.length+b.get.length)-(a.give.length+a.get.length));
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
@@ -293,8 +293,8 @@ function viewMatch(){
       <div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
       <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
     });
-    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"片方向のみ"}</span></header>
-      ${statLine(st,x.m.id)}${blocks}</section>`;
+    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"マッチなし"}</span></header>
+      ${statLine(st,x.m.id)}${blocks||'<p class="sub" style="margin:8px 0 0">いま交換できるメダルはありません。</p>'}</section>`;
   });
   return h;
 }
