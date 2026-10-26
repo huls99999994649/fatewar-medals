@@ -414,19 +414,16 @@ function viewMember(oid){
   if(!mem||oid===ident.id){detail=null;return tab==="members"?viewMembers():viewGuild()}
   const oq=hold.get(oid)||{};
   const miss=MEDALS.filter(m=>qty(oq,m.id)===0);
-  const st=pairStat(oid), rg=rarGap(oid);
+  const st=pairStat(oid);
   const canGive=miss.filter(m=>qty(me.q,m.id)>=2);
-  const giveNow=canGive.filter(m=>!(rg[m.r]>0)), giveSet=new Set(giveNow.map(m=>m.id));
+  const giveNow=canGive, giveSet=new Set(giveNow.map(m=>m.id));
   let g="";
   ["pre","cla","leg"].forEach(r=>{
     const ms=canGive.filter(m=>m.r===r); if(!ms.length)return;
-    const wait=rg[r]>0;
-    g+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>${wait?"お返し待ち":`贈れる ${ms.length}種`}</span></div>`+(wait
-      ?`<p class="sub" style="margin:6px 0">${RAR_LABEL[r]}を先に${rg[r]}枚贈っています。お返しを待ちましょう。</p>`
-      :`<div class="chips">${ms.map(m=>chip(m,"",qty(me.q,m.id),oid,st.sm.has(m.id)?"贈り済み":"")).join("")}</div>`);
+    g+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>贈れる ${ms.length}種</span></div><div class="chips">${ms.map(m=>chip(m,"",qty(me.q,m.id),oid,st.sm.has(m.id)?"贈り済み":"")).join("")}</div>`;
   });
   const pm=pending&&pending.to===oid?MEDALS.find(m=>m.id===pending.medal):null;
-  const conf=pm&&!(rg[pm.r]>0)?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(mem.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+  const conf=pm?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(mem.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
   let tl="";
   THEMES.forEach(([tn],t)=>{
     const ms=miss.filter(m=>m.t===t); if(!ms.length)return;
