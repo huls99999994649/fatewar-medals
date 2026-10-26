@@ -283,7 +283,7 @@ function statLine(st,oid){
   if(!st.sent&&!st.recv)t="まだやり取りなし";
   else if(d===0&&!nz.length&&!st.sp&&!st.rp){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 交換済み`;c=" ok"}
   else if(d===0&&!nz.length){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
-  else if(d===0){t=`⚠ 贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 → <strong>レア度が合っていません</strong>`;c=" gap"}
+  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
   else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
   if(nz.length>=2)t+=`<br><small class="sub">${nz.map(r=>net[r]>0?`${RAR_LABEL[r]}はあと${net[r]}枚もらっていません`:`${RAR_LABEL[r]}はあと${-net[r]}枚贈っていません`).join("／")}</small>`;
