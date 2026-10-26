@@ -311,11 +311,22 @@ function viewMatch(){
     const st=pairStat(x.m.id);
     const pm=pending&&pending.to===x.m.id?MEDALS.find(m=>m.id===pending.medal):null;
     let blocks="";
-    const rg=rarGap(x.m.id), nt=rarNet(x.m.id), shown=new Set();
+    const rg=rarGap(x.m.id), nt=rarNet(x.m.id);
     ["pre","cla","leg"].forEach(r=>{
       const gv=x.give.filter(m=>m.r===r), gt=x.get.filter(m=>m.r===r);
-      if(!gv.length&&!gt.length)return;
-      shown.add(r);
+      if(!gv.length&&!gt.length){
+        /* マッチの枠がないレア度でも、お返しが残っている/もらえる分があれば、そのレア度の見出しをつけて出す */
+        const srt=a=>a.filter(m=>m.r===r).sort((p,q)=>p.id-q.id);
+        if(nt[r]<0){
+          const n=-nt[r], gl=srt(x.give0);
+          const cs=gl.map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
+          const conf=pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+          blocks+=`<div class="rar ${r} fb"><b>${RAR_LABEL[r]}</b><span>お返し ${n}枚</span></div>`+(gl.length?`<div class="row"><span class="lab">お返しに贈れる(${RAR_LABEL[r]})(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。この中から、あと${n}枚贈ってください${gl.length<n?`(候補は${gl.length}枚です)`:""}。</p>`:`<p class="sub" style="margin:8px 0 0">同じレア度(${RAR_LABEL[r]})でお返しに贈れる余りはありません。</p>`);
+        }else if(nt[r]>0&&srt(x.get0).length){
+          blocks+=`<div class="rar ${r} fb"><b>${RAR_LABEL[r]}</b><span>お返し待ち</span></div><div class="row"><span class="lab">あなたがもらえる(${RAR_LABEL[r]})(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
+        }
+        return;
+      }
       const wait=rg[r]>0, n=wait?0:Math.min(gv.length,gt.length);
       const give=gv.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
       const get=gt.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
@@ -323,19 +334,6 @@ function viewMatch(){
       blocks+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>${wait?"お返し待ち":`マッチ ${n}組`}</span></div>
       ${wait?`<p class="sub" style="margin:6px 0">${RAR_LABEL[r]}を先に${rg[r]}枚贈っています。お返しを待ちましょう。</p>`:`<div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}`}
       <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
-    });
-    /* マッチの枠が出ていないレア度で、お返しが残っている/もらえる分があるとき */
-    ["pre","cla","leg"].forEach(r=>{
-      if(shown.has(r))return;
-      const srt=a=>a.filter(m=>m.r===r).sort((p,q)=>p.id-q.id);
-      if(nt[r]<0){
-        const n=-nt[r], gl=srt(x.give0);
-        const cs=gl.map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
-        const conf=pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
-        blocks+=gl.length?`<div class="row"><span class="lab">お返しに贈れる(${RAR_LABEL[r]})(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。この中から、あと${n}枚贈ってください${gl.length<n?`(候補は${gl.length}枚です)`:""}。</p>`:`<p class="sub" style="margin:8px 0 0">同じレア度(${RAR_LABEL[r]})でお返しに贈れる余りはありません。</p>`;
-      }else if(nt[r]>0&&srt(x.get0).length){
-        blocks+=`<div class="row"><span class="lab">あなたがもらえる(${RAR_LABEL[r]})(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
-      }
     });
     h+=`<section class="card${unsettled(x.m.id)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.sw?"":"none"}">${x.sw?`マッチ ${x.sw}組`:(x.wt?"お返し待ち":"マッチなし")}</span></header>
       ${statLine(st,x.m.id)}${blocks||'<p class="sub" style="margin:8px 0 0">いま交換できるメダルはありません。</p>'}</section>`;
