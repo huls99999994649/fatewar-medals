@@ -256,7 +256,7 @@ function pairStat(oid){
   return st;
 }
 const gap=st=>st.sent-st.recv;
-/* レア度ごとの「あなたが贈った枚数 − 受け取った枚数」。プラスなら、そのレア度は先に贈っている(お返し待ち) */
+/* レア度ごとの「あなたが贈った枚数 − 受け取った枚数」(お返し待ちの枚数。待ちでなければ0) */
 function rarGap(oid){
   const o={pre:0,cla:0,leg:0};
   gifts.forEach(g=>{
@@ -264,6 +264,9 @@ function rarGap(oid){
     if(g.from===ident.id&&g.to===oid)o[m.r]+=g.qty;
     else if(g.to===ident.id&&g.from===oid)o[m.r]-=g.qty;
   });
+  /* 全体でも先に贈っているとき(差>0)だけ、そのレア度の「お返し待ち」にする。枚数は、全体の差とレア度の差の小さいほう */
+  const d=o.pre+o.cla+o.leg;
+  ["pre","cla","leg"].forEach(r=>{o[r]=(d>0&&o[r]>0)?Math.min(o[r],d):0});
   return o;
 }
 function statLine(st,oid){
