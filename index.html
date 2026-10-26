@@ -256,6 +256,16 @@ function pairStat(oid){
   return st;
 }
 const gap=st=>st.sent-st.recv;
+/* レア度ごとの「あなたが贈った枚数 − 受け取った枚数」。プラスなら、そのレア度は先に贈っている(お返し待ち) */
+function rarGap(oid){
+  const o={pre:0,cla:0,leg:0};
+  gifts.forEach(g=>{
+    const m=MEDALS.find(x=>x.id===g.medal); if(!m)return;
+    if(g.from===ident.id&&g.to===oid)o[m.r]+=g.qty;
+    else if(g.to===ident.id&&g.from===oid)o[m.r]-=g.qty;
+  });
+  return o;
+}
 function statLine(st,oid){
   const d=gap(st);
   let t,c="";
@@ -272,8 +282,13 @@ function viewMatch(){
   const spareTotal=MEDALS.reduce((a,m)=>a+Math.max(0,qty(me.q,m.id)-1),0);
   const spareKinds=MEDALS.filter(m=>qty(me.q,m.id)>=2).length;
   const others=members.filter(m=>m.id!==ident.id).map(m=>({m,q:hold.get(m.id)||{}}));
-  const list=others.map(x=>({...x,...matchWith(x.q)})).filter(x=>{if(x.give.length||x.get.length)return true;const st=pairStat(x.m.id);return gap(st)!==0||st.sp>0||st.rp>0})
-    .sort((a,b)=>(gap(pairStat(b.m.id))!==0)-(gap(pairStat(a.m.id))!==0)||b.swaps-a.swaps||(b.give.length+b.get.length)-(a.give.length+a.get.length));
+  const list=others.map(x=>{
+    const o={...x,...matchWith(x.q)}, rg=rarGap(x.m.id);
+    o.sw=["pre","cla","leg"].reduce((a,r)=>a+(rg[r]>0?0:Math.min(o.give.filter(m=>m.r===r).length,o.get.filter(m=>m.r===r).length)),0);
+    o.wt=["pre","cla","leg"].some(r=>rg[r]>0&&(o.give.some(m=>m.r===r)||o.get.some(m=>m.r===r)));
+    return o;
+  }).filter(x=>{if(x.give.length||x.get.length)return true;const st=pairStat(x.m.id);return gap(st)!==0||st.sp>0||st.rp>0})
+    .sort((a,b)=>(gap(pairStat(b.m.id))!==0)-(gap(pairStat(a.m.id))!==0)||b.sw-a.sw||(b.give.length+b.get.length)-(a.give.length+a.get.length));
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
@@ -283,15 +298,16 @@ function viewMatch(){
     const st=pairStat(x.m.id);
     const pm=pending&&pending.to===x.m.id?MEDALS.find(m=>m.id===pending.medal):null;
     let blocks="";
+    const rg=rarGap(x.m.id);
     ["pre","cla","leg"].forEach(r=>{
       const gv=x.give.filter(m=>m.r===r), gt=x.get.filter(m=>m.r===r);
       if(!gv.length&&!gt.length)return;
-      const n=Math.min(gv.length,gt.length);
+      const wait=rg[r]>0, n=wait?0:Math.min(gv.length,gt.length);
       const give=gv.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
       const get=gt.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
-      const conf=pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
-      blocks+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>マッチ ${n}組</span></div>
-      <div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}
+      const conf=!wait&&pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+      blocks+=`<div class="rar ${r}"><b>${RAR_LABEL[r]}</b><span>${wait?"お返し待ち":`マッチ ${n}組`}</span></div>
+      ${wait?`<p class="sub" style="margin:6px 0">${RAR_LABEL[r]}を先に${rg[r]}枚贈っています。お返しを待ちましょう。</p>`:`<div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}`}
       <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
     });
     if(!blocks){
@@ -309,7 +325,7 @@ function viewMatch(){
         blocks=`<div class="row"><span class="lab">あなたがもらえる${rl?`(${rl})`:""}(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
       }
     }
-    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.swaps?"":"none"}">${x.swaps?`マッチ ${x.swaps}組`:"マッチなし"}</span></header>
+    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.sw?"":"none"}">${x.sw?`マッチ ${x.sw}組`:(x.wt?"お返し待ち":"マッチなし")}</span></header>
       ${statLine(st,x.m.id)}${blocks||'<p class="sub" style="margin:8px 0 0">いま交換できるメダルはありません。</p>'}</section>`;
   });
   return h;
