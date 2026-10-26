@@ -161,7 +161,7 @@ const ERR={"invalid gift":"確認できる記録がありません。","invalid 
 
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 let code=store.get("fw_code"), ident=store.get("fw_ident"); // {id,secret,name}
-let members=[], hold=new Map(), gifts=[], me=null;
+let members=[], hold=new Map(), gifts=[], me=null, adjM={}; // adjM: 相手ID→{pre,cla,leg} 話し合いで解決済みの枚数(自分から見た値)
 let tab="match", filter="all", pending=null, gateErr="", gateMode="login", loaded=false, netErr=false;
 let hasPw; // undefined=未確認
 let lastSig="";
@@ -181,9 +181,10 @@ async function load(){
   if(!code)return;
   try{
     const s=await rpc("fw_state",ident?{p_code:code,p_member:ident.id,p_secret:ident.secret}:{p_code:code});
-    const sig=JSON.stringify([s.members,s.holdings,s.gifts]);
+    const sig=JSON.stringify([s.members,s.holdings,s.gifts,s.adj]);
     const skip=!!(ident&&me)&&loaded&&!netErr&&sig===lastSig;lastSig=sig;
     members=s.members;gifts=s.gifts;
+    adjM={};(s.adj||[]).forEach(([o,r,q])=>{const k={precious:"pre",classic:"cla",legend:"leg"}[r];if(!k)return;(adjM[o]=adjM[o]||{pre:0,cla:0,leg:0})[k]+=q});
     const h=new Map();members.forEach(m=>h.set(m.id,{}));
     s.holdings.forEach(([mid,med,q])=>{if(h.has(mid))h.get(mid)[med]=q});
     hold=h;netErr=false;
@@ -248,35 +249,44 @@ function recvBanner(un){
 }
 
 function pairStat(oid){
-  const st={sent:0,recv:0,sp:0,rp:0,sm:new Set(),rm:new Set()};
+  const st={sent:0,recv:0,sp:0,rp:0,sm:new Set(),rm:new Set(),adj:0};
   gifts.forEach(g=>{
     if(g.from===ident.id&&g.to===oid){st.sent+=g.qty;st.sm.add(g.medal);if(!g.ok)st.sp+=g.qty}
     else if(g.to===ident.id&&g.from===oid){st.recv+=g.qty;st.rm.add(g.medal);if(!g.ok)st.rp+=g.qty}
   });
+  const a=adjM[oid];if(a)st.adj=a.pre+a.cla+a.leg;
   return st;
 }
-const gap=st=>st.sent-st.recv;
-/* レア度ごとの「あなたが贈った枚数 − 受け取った枚数」(お返し待ちの枚数。待ちでなければ0) */
-function rarGap(oid){
+/* 差 = 贈った − 受け取った − 話し合いで解決済みの分 */
+const gap=st=>st.sent-st.recv-st.adj;
+/* レア度ごとの「あなたが贈った枚数 − 受け取った枚数」(正=お返し待ち、負=あなたがお返しする分、解決済みの分は除く) */
+function rarNet(oid){
   const o={pre:0,cla:0,leg:0};
   gifts.forEach(g=>{
     const m=MEDALS.find(x=>x.id===g.medal); if(!m)return;
     if(g.from===ident.id&&g.to===oid)o[m.r]+=g.qty;
     else if(g.to===ident.id&&g.from===oid)o[m.r]-=g.qty;
   });
-  /* 全体でも先に贈っているとき(差>0)だけ、そのレア度の「お返し待ち」にする。枚数は、全体の差とレア度の差の小さいほう */
-  const d=o.pre+o.cla+o.leg;
-  ["pre","cla","leg"].forEach(r=>{o[r]=(d>0&&o[r]>0)?Math.min(o[r],d):0});
+  const a=adjM[oid];if(a)["pre","cla","leg"].forEach(r=>{o[r]-=a[r]});
   return o;
 }
+/* 先に多く贈っているレア度(お返し待ち)の枚数。待ちでなければ0 */
+function rarGap(oid){
+  const n=rarNet(oid);
+  return {pre:Math.max(0,n.pre),cla:Math.max(0,n.cla),leg:Math.max(0,n.leg)};
+}
+/* まだ清算できていないペアか(枚数の差、またはレア度の差がある) */
+function unsettled(oid){const n=rarNet(oid);return gap(pairStat(oid))!==0||n.pre!==0||n.cla!==0||n.leg!==0}
 function statLine(st,oid){
-  const d=gap(st);
+  const d=gap(st), net=rarNet(oid), nz=["pre","cla","leg"].filter(r=>net[r]!==0);
   let t,c="";
   if(!st.sent&&!st.recv)t="まだやり取りなし";
-  else if(d===0&&!st.sp&&!st.rp){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 交換済み`;c=" ok"}
-  else if(d===0){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
+  else if(d===0&&!nz.length&&!st.sp&&!st.rp){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 ✓ 交換済み`;c=" ok"}
+  else if(d===0&&!nz.length){t=`贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚`;c=" gap"}
+  else if(d===0){t=`⚠ 贈り ${st.sent}枚 ／ 受け取り ${st.recv}枚 → <strong>レア度が合っていません</strong>`;c=" gap"}
   else if(d>0){t=`⚠ あなたは${st.sent}枚贈り、受け取りは${st.recv}枚 → <strong>あと${d}枚もらっていません</strong>`;c=" gap"}
   else{t=`⚠ 受け取り${st.recv}枚に対して、贈りは${st.sent}枚 → <strong>あと${-d}枚贈っていません</strong>`;c=" gap"}
+  if(nz.length>=2)t+=`<br><small class="sub">${nz.map(r=>net[r]>0?`${RAR_LABEL[r]}はあと${net[r]}枚もらっていません`:`${RAR_LABEL[r]}はあと${-net[r]}枚贈っていません`).join("／")}</small>`;
   t+=(st.sp?`<br>相手の確認待ち ${st.sp}枚<small class="sub">（相手がゲームで受け取りを確認すると「確認済み」に変わります）</small>`:"")+(st.rp?`<br><strong>あなたの確認待ち ${st.rp}枚</strong>`:"");
   return `<p class="stat${c}"><b>状況</b>　${t}${st.sent||st.recv?`　<button class="linkbtn" data-hist="${oid}">履歴を見る</button>`:""}</p>`;
 }
@@ -290,8 +300,8 @@ function viewMatch(){
     o.sw=["pre","cla","leg"].reduce((a,r)=>a+(rg[r]>0?0:Math.min(o.give.filter(m=>m.r===r).length,o.get.filter(m=>m.r===r).length)),0);
     o.wt=["pre","cla","leg"].some(r=>rg[r]>0&&(o.give.some(m=>m.r===r)||o.get.some(m=>m.r===r)));
     return o;
-  }).filter(x=>{if(x.give.length||x.get.length)return true;const st=pairStat(x.m.id);return gap(st)!==0||st.sp>0||st.rp>0})
-    .sort((a,b)=>(gap(pairStat(b.m.id))!==0)-(gap(pairStat(a.m.id))!==0)||b.sw-a.sw||(b.give.length+b.get.length)-(a.give.length+a.get.length));
+  }).filter(x=>{if(x.give.length||x.get.length)return true;const st=pairStat(x.m.id);return unsettled(x.m.id)||st.sp>0||st.rp>0})
+    .sort((a,b)=>(!!unsettled(b.m.id))-(!!unsettled(a.m.id))||b.sw-a.sw||(b.give.length+b.get.length)-(a.give.length+a.get.length));
   const anySpare=new Set();others.forEach(x=>MEDALS.forEach(m=>{if(qty(x.q,m.id)>=2)anySpare.add(m.id)}));
   const none=miss.filter(m=>!anySpare.has(m.id)).length;
   let h=`<div class="summary"><span>未所持 <b>${miss.length}</b>種</span><span>余り <b>${spareTotal}</b>枚(${spareKinds}種)</span><span>ギルドに余りがない未所持 <b>${none}</b>種</span></div>`;
@@ -301,10 +311,11 @@ function viewMatch(){
     const st=pairStat(x.m.id);
     const pm=pending&&pending.to===x.m.id?MEDALS.find(m=>m.id===pending.medal):null;
     let blocks="";
-    const rg=rarGap(x.m.id);
+    const rg=rarGap(x.m.id), nt=rarNet(x.m.id), shown=new Set();
     ["pre","cla","leg"].forEach(r=>{
       const gv=x.give.filter(m=>m.r===r), gt=x.get.filter(m=>m.r===r);
       if(!gv.length&&!gt.length)return;
+      shown.add(r);
       const wait=rg[r]>0, n=wait?0:Math.min(gv.length,gt.length);
       const give=gv.map(m=>chip(m,missingIn(x.q,m.t)===1?"コンプ":"",qty(me.q,m.id),x.m.id,st.sm.has(m.id)?"贈り済み":"")).join("");
       const get=gt.map(m=>chip(m,missingIn(me.q,m.t)===1?"コンプ":"",qty(x.q,m.id),"",st.rm.has(m.id)?"受取済":"")).join("");
@@ -313,22 +324,20 @@ function viewMatch(){
       ${wait?`<p class="sub" style="margin:6px 0">${RAR_LABEL[r]}を先に${rg[r]}枚贈っています。お返しを待ちましょう。</p>`:`<div class="row"><span class="lab">あなたが贈れる(${gv.length})</span><div class="chips">${give||'<span class="sub">なし</span>'}</div></div>${conf}`}
       <div class="row"><span class="lab">あなたがもらえる(${gt.length})</span><div class="chips">${get||'<span class="sub">なし</span>'}</div></div>`;
     });
-    if(!blocks){
-      const d=gap(st), rk=["pre","cla","leg"];
-      const rr=new Set([...(d<0?st.rm:st.sm)].map(id=>(MEDALS.find(m=>m.id===id)||{}).r).filter(Boolean));
-      const same=a=>rr.size?a.filter(m=>rr.has(m.r)):a;
-      const rl=rk.filter(r=>rr.has(r)).map(r=>RAR_LABEL[r]).join("・");
-      const srt=a=>same(a).sort((p,q)=>rk.indexOf(p.r)-rk.indexOf(q.r)||p.id-q.id);
-      if(d<0){
-        const gl=srt(x.give0);
+    /* マッチの枠が出ていないレア度で、お返しが残っている/もらえる分があるとき */
+    ["pre","cla","leg"].forEach(r=>{
+      if(shown.has(r))return;
+      const srt=a=>a.filter(m=>m.r===r).sort((p,q)=>p.id-q.id);
+      if(nt[r]<0){
+        const n=-nt[r], gl=srt(x.give0);
         const cs=gl.map(m=>chip(m,"",qty(me.q,m.id),x.m.id,"")).join("");
-        const conf=pm?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
-        blocks=gl.length?`<div class="row"><span class="lab">お返しに贈れる${rl?`(${rl})`:""}(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。この中から、あと${-d}枚贈ってください${gl.length<-d?`(候補は${gl.length}枚です)`:""}。</p>`:`<p class="sub" style="margin:8px 0 0">${rl?`同じレア度(${rl})で`:""}お返しに贈れる余りはありません。</p>`;
-      }else if(d>0&&srt(x.get0).length){
-        blocks=`<div class="row"><span class="lab">あなたがもらえる${rl?`(${rl})`:""}(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
+        const conf=pm&&pm.r===r?`<div class="confirm"><span>「${esc(pm.name)}」を${esc(x.m.name)}さんに贈りましたか?</span><button class="btn" data-ok="1">記録する</button><button class="btn ghost" data-cancel="1">やめる</button></div>`:"";
+        blocks+=gl.length?`<div class="row"><span class="lab">お返しに贈れる(${RAR_LABEL[r]})(${gl.length})</span><div class="chips">${cs}</div></div>${conf}<p class="sub" style="margin:6px 0 0">${esc(x.m.name)}さんが持っていない、あなたの余りです。この中から、あと${n}枚贈ってください${gl.length<n?`(候補は${gl.length}枚です)`:""}。</p>`:`<p class="sub" style="margin:8px 0 0">同じレア度(${RAR_LABEL[r]})でお返しに贈れる余りはありません。</p>`;
+      }else if(nt[r]>0&&srt(x.get0).length){
+        blocks+=`<div class="row"><span class="lab">あなたがもらえる(${RAR_LABEL[r]})(${srt(x.get0).length})</span><div class="chips">${srt(x.get0).map(m=>chip(m,"",qty(x.q,m.id),"","")).join("")}</div></div>`;
       }
-    }
-    h+=`<section class="card${gap(st)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.sw?"":"none"}">${x.sw?`マッチ ${x.sw}組`:(x.wt?"お返し待ち":"マッチなし")}</span></header>
+    });
+    h+=`<section class="card${unsettled(x.m.id)?" diff":""}"><header><h3>${esc(x.m.name)}</h3><span class="swap ${x.sw?"":"none"}">${x.sw?`マッチ ${x.sw}組`:(x.wt?"お返し待ち":"マッチなし")}</span></header>
       ${statLine(st,x.m.id)}${blocks||'<p class="sub" style="margin:8px 0 0">いま交換できるメダルはありません。</p>'}</section>`;
   });
   return h;

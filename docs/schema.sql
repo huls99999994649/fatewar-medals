@@ -51,6 +51,19 @@ create table "03_fatewar_medals".gifts (
   confirmed_at timestamptz                          -- 受け取り側が確認した時刻
 );
 
+-- 「話し合いで解決済み」の印。aがbに贈った枚数−受け取った枚数のうち、そのレア度のqty枚分は差から引く(a<b の向きで1行)。
+-- メダルの枚数・交換履歴は書き換えず、取り置き/お返し待ち/交換済みの判定にだけ使う。
+create table if not exists "03_fatewar_medals".pair_adj (
+  a uuid not null references "03_fatewar_medals".members(id) on delete cascade,
+  b uuid not null references "03_fatewar_medals".members(id) on delete cascade,
+  rarity text not null check (rarity in ('precious','classic','legend')),
+  qty int not null check (qty <> 0),
+  primary key (a, b, rarity),
+  check (a < b)
+);
+alter table "03_fatewar_medals".pair_adj enable row level security;
+revoke all on "03_fatewar_medals".pair_adj from anon, authenticated;
+
 -- 表への直接アクセスは禁止(ポリシーなし)。画面は下の関数(RPC)だけを使います。
 alter table "03_fatewar_medals".settings enable row level security;
 alter table "03_fatewar_medals".themes   enable row level security;
@@ -84,12 +97,12 @@ end $$;
 -- ---------- 画面から呼ぶ関数(RPC) ----------
 -- 全体の状態を返す(自分に関係する交換履歴だけを含む)。
 -- 取り置き表示: 「あなたに贈る義務がある相手」の候補メダルを、他の人の画面から隠す(表示のみ。実際の枚数は変えない)
--- 隠すのは、次の条件をすべて満たすときだけ。迷う場合は隠さない(今までと同じ表示)。
---   Y(もらう側) と X(贈る側) のペアで
---   (1) 全体で Y が X に贈った枚数 > X が Y に贈った枚数   (差 d > 0)
---   (2) あるレア度 r でも、Y が X に贈った枚数 > X が Y に贈った枚数  (差 dr > 0)
---   (3) X の余り(2枚以上)のうち、Y が持っていない、レア度 r のメダルの種類数 <= min(d, dr)
+-- 清算はレア度ごと(同じレア度同士で交換する取り決め)。隠すのは、次の条件をすべて満たすときだけ。迷う場合は隠さない。
+--   Y(もらう側) と X(贈る側) のペアで、あるレア度 r について
+--   (1) 差 dr = (Y が X に贈った枚数 − X が Y に贈った枚数 − 解決済みの印 pair_adj) > 0
+--   (2) X の余り(2枚以上)のうち、Y が持っていない、レア度 r のメダルの種類数 <= dr
 --   → この候補は Y のために取り置き、Y 以外の人(X 本人も除く)には、その1枚分の余りを見せない。
+-- 'adj' には、自分のペアの印だけを [相手, レア度, 自分から見た枚数] で返す(他の人の分は返さない)。
 create or replace function public.fw_state(p_code text, p_member uuid default null, p_secret uuid default null)
 returns json language plpgsql security definer set search_path to '' as $$
 declare rj json; ok boolean := false;
@@ -104,22 +117,24 @@ begin
     'medals', (select coalesce(json_agg(json_build_object('id', id, 'theme', theme_no, 'pos', pos, 'name', name, 'rarity', rarity) order by id), '[]'::json) from "03_fatewar_medals".medals),
     'members', (select coalesce(json_agg(json_build_object('id', id, 'name', name) order by created_at), '[]'::json) from "03_fatewar_medals".members),
     'holdings', (
-      with s as (
-        select g.from_member as y, g.to_member as x, sum(g.qty)::int as q
-        from "03_fatewar_medals".gifts g group by 1, 2),
-      sr as (
+      with sr as (
         select g.from_member as y, g.to_member as x, m.rarity as r, sum(g.qty)::int as q
         from "03_fatewar_medals".gifts g join "03_fatewar_medals".medals m on m.id = g.medal_id group by 1, 2, 3),
-      dtot as (
-        select a.y, a.x, a.q - coalesce(b.q, 0) as d
-        from s a left join s b on b.y = a.x and b.x = a.y),
-      drar as (
-        select a.y, a.x, a.r, a.q - coalesce(b.q, 0) as dr
-        from sr a left join sr b on b.y = a.x and b.x = a.y and b.r = a.r),
+      adjd as (
+        select a as y, b as x, rarity as r, qty from "03_fatewar_medals".pair_adj
+        union all
+        select b, a, rarity, -qty from "03_fatewar_medals".pair_adj),
+      keys as (
+        select y, x, r from sr union select x, y, r from sr union select y, x, r from adjd),
+      -- (y→x) のレア度ごとの差 = yが贈った − xが贈った − 解決済みの印
       cap as (
-        select t.y, t.x, v.r, least(t.d, v.dr) as c
-        from dtot t join drar v on v.y = t.y and v.x = t.x
-        where t.d > 0 and v.dr > 0),
+        select k.y, k.x, k.r,
+               coalesce(a.q, 0) - coalesce(b.q, 0) - coalesce(ad.qty, 0) as c
+        from keys k
+        left join sr a on a.y = k.y and a.x = k.x and a.r = k.r
+        left join sr b on b.y = k.x and b.x = k.y and b.r = k.r
+        left join adjd ad on ad.y = k.y and ad.x = k.x and ad.r = k.r
+        where coalesce(a.q, 0) - coalesce(b.q, 0) - coalesce(ad.qty, 0) > 0),
       cand as (
         select c.y, c.x, c.r, h.medal_id
         from cap c
@@ -150,12 +165,16 @@ begin
               from (select g.id, g.from_member as "from", g.to_member as "to", g.medal_id as medal, g.qty, g.created_at as at, (g.confirmed_at is not null) as ok
                     from "03_fatewar_medals".gifts g
                     where ok and (g.from_member = p_member or g.to_member = p_member)
-                    order by g.created_at desc limit 300) x)
+                    order by g.created_at desc limit 300) x),
+    -- 自分のペアの「話し合いで解決済み」の印: [相手, レア度, 自分から見た枚数]
+    'adj', (select coalesce(json_agg(json_build_array(z.o, z.r, z.q)), '[]'::json)
+            from (select b as o, rarity as r, qty as q from "03_fatewar_medals".pair_adj where ok and a = p_member
+                  union all
+                  select a, rarity, -qty from "03_fatewar_medals".pair_adj where ok and b = p_member) z)
   ) into rj;
   return rj;
 end $$;
 
--- 版番号: 取り置きは全員の贈り記録に依存するため、全体の贈りの件数と最大IDも含める
 create or replace function public.fw_ver(p_code text, p_member uuid default null)
 returns text language plpgsql security definer set search_path to '' as $$
 declare v text;
@@ -166,7 +185,9 @@ begin
     (select coalesce(string_agg(id::text||name, ',' order by id),'') from "03_fatewar_medals".members),
     (select count(*)::text||':'||coalesce(max(id),0)::text||':'||coalesce(max(confirmed_at)::text,'')
        from "03_fatewar_medals".gifts g where p_member is not null and (g.from_member=p_member or g.to_member=p_member)),
-    (select count(*)::text||':'||coalesce(max(id),0)::text from "03_fatewar_medals".gifts)
+    (select count(*)::text||':'||coalesce(max(id),0)::text from "03_fatewar_medals".gifts),
+    -- 印は全員の取り置きの判定に影響するため、全体の件数と内容を含める
+    (select coalesce(string_agg(a::text||b::text||rarity||qty::text, ',' order by a, b, rarity),'') from "03_fatewar_medals".pair_adj)
   )) into v;
   return v;
 end $$;
