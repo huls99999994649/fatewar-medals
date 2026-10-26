@@ -406,7 +406,7 @@ function viewMembers(){
     tb+=`<tr><td>${r.m.id===ident.id?`${esc(r.m.name)}(自分)`:`<button class="linkbtn" data-member="${r.m.id}">${esc(r.m.name)}</button>`}</td><td class="n">${kinds}/81</td><td class="n">${th}/9</td><td class="n">${sp}</td></tr>`;
   });
   tb+=`</tbody></table></div>`;
-  return `<h2>ギルドのメンバー</h2><p class="sub" style="margin:0 0 8px">名前を押すと、そのメンバーの足りないメダルが見られます。</p>`+tb;
+  return `<h2>ギルドのメンバー</h2><p class="sub" style="margin:0 0 8px">名前を押すと、そのメンバーの足りないメダルが見られます。<br>※マッチとは別機能です。お返しを待たず、こちらから贈るだけの機能です。</p>`+tb;
 }
 /* メンバーの詳細: そのメンバーが持っていない(足りない)メダルの一覧。あなたの余りで贈れるものは「贈った」ボタンつき */
 function viewMember(oid){
