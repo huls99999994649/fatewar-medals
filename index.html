@@ -432,7 +432,6 @@ function viewMember(oid){
   return `<p style="margin:0 0 12px"><button class="linkbtn" data-back="1">← 戻る</button></p>
   <h2>${esc(mem.name)}さん</h2>
   <div class="summary"><span>足りないメダル <b>${miss.length}</b>種</span><span>あなたが贈れる <b>${giveNow.length}</b>種</span></div>
-  ${statLine(st,oid)}
   <section class="card"><h3 style="margin:0 0 6px">あなたが贈れるメダル</h3>${g?g+conf:`<p class="sub" style="margin:0">あなたの余りで、${esc(mem.name)}さんに贈れるメダルはありません。</p>`}</section>
   <h2 style="margin-top:18px">足りないメダル(${miss.length}種)</h2>${tl||`<p class="sub">足りないメダルはありません。</p>`}`;
 }
