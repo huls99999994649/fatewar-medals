@@ -252,8 +252,8 @@ function recvBanner(un){
 function pairStat(oid){
   const st={sent:0,recv:0,sp:0,rp:0,sm:new Set(),rm:new Set(),adj:0};
   gifts.forEach(g=>{
-    if(g.from===ident.id&&g.to===oid){st.sent+=g.qty;st.sm.add(g.medal);if(!g.ok)st.sp+=g.qty}
-    else if(g.to===ident.id&&g.from===oid){st.recv+=g.qty;st.rm.add(g.medal);if(!g.ok)st.rp+=g.qty}
+    if(g.from===ident.id&&g.to===oid){st.sm.add(g.medal);if(!g.free){st.sent+=g.qty;if(!g.ok)st.sp+=g.qty}}
+    else if(g.to===ident.id&&g.from===oid){st.rm.add(g.medal);if(!g.free){st.recv+=g.qty;if(!g.ok)st.rp+=g.qty}}
   });
   const a=adjM[oid];if(a)st.adj=a.pre+a.cla+a.leg;
   return st;
@@ -264,7 +264,7 @@ const gap=st=>st.sent-st.recv-st.adj;
 function rarNet(oid){
   const o={pre:0,cla:0,leg:0};
   gifts.forEach(g=>{
-    const m=MEDALS.find(x=>x.id===g.medal); if(!m)return;
+    const m=MEDALS.find(x=>x.id===g.medal); if(!m||g.free)return;
     if(g.from===ident.id&&g.to===oid)o[m.r]+=g.qty;
     else if(g.to===ident.id&&g.from===oid)o[m.r]-=g.qty;
   });
@@ -438,9 +438,9 @@ function viewMember(oid){
 function viewGuild(){
   const mine=gifts.filter(g=>g.from===ident.id||g.to===ident.id).sort((a,b)=>b.id-a.id);
   const groups=new Map();
-  mine.forEach(g=>{const o=g.from===ident.id?g.to:g.from;if(!groups.has(o))groups.set(o,{o,list:[],sent:0,recv:0,last:g.at});const x=groups.get(o);x.list.push(g);if(g.from===ident.id)x.sent+=g.qty;else x.recv+=g.qty});
+  mine.forEach(g=>{const o=g.from===ident.id?g.to:g.from;if(!groups.has(o))groups.set(o,{o,list:[],sent:0,recv:0,last:g.at});const x=groups.get(o);x.list.push(g);if(!g.free){if(g.from===ident.id)x.sent+=g.qty;else x.recv+=g.qty}});
   const fmt=at=>new Date(at).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
-  const line=g=>{const m=MEDALS.find(x=>x.id===g.medal);const out=g.from===ident.id;return `<li>${fmt(g.at)}　<b>${out?"贈った":"受け取った"}</b>　${esc(m?m.name:"")}${g.qty>1?` ×${g.qty}`:""}　${ackMark(g)}</li>`};
+  const line=g=>{const m=MEDALS.find(x=>x.id===g.medal);const out=g.from===ident.id;return `<li>${fmt(g.at)}　<b>${out?"贈った":"受け取った"}</b>　${esc(m?m.name:"")}${g.qty>1?` ×${g.qty}`:""}　${g.free?`<small class="sub">あげた</small>　`:""}${ackMark(g)}</li>`};
   let h=`<h2>交換履歴(相手ごと・新しい順)</h2>`;
   if(!groups.size)h+=`<p class="sub">まだありません。</p>`;
   groups.forEach(x=>{
@@ -495,12 +495,12 @@ document.addEventListener("click",async e=>{
   if(d.logout){store.del("fw_ident");detail=null;ident=null;me=null;hasPw=undefined;gateErr="";render();return}
   if(d.d&&me){const id=d.id;me.q[id]=Math.max(0,Math.min(999,qty(me.q,id)+Number(d.d)));changed.add(id);queueSave();render();return}
   if(d.seen&&ident){store.set("fw_seen_"+ident.id,maxGift());render();return}
-  if(d.gift){pending={to:d.to,medal:+d.gift};render();return}
+  if(d.gift){pending={to:d.to,medal:+d.gift,free:!!detail};render();return}
   if(d.cancel){pending=null;render();return}
   if(d.ok&&pending){
     const p=pending;pending=null;
     if(dirty||saving||changed.size){clearTimeout(timer);await flush()}
-    try{await rpc("fw_gift",{p_code:code,p_member:ident.id,p_secret:ident.secret,p_to:p.to,p_medal:p.medal,p_qty:1});setStatus("記録しました")}
+    try{await rpc("fw_gift",{p_code:code,p_member:ident.id,p_secret:ident.secret,p_to:p.to,p_medal:p.medal,p_qty:1,p_free:!!p.free});setStatus("記録しました")}
     catch(err){setStatus(err.message==="network"?"通信に失敗しました":err.message,true)}
     await load();
   }

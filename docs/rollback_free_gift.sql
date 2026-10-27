@@ -1,0 +1,2 @@
+-- 「あげた」の印を戻す場合: 画面を前の版に戻したうえで、fw_state / fw_ver を docs/rollback_rarity_to_reserve_fw_state.sql の内容に戻す。
+-- (gifts.free 列は残しても害はない。fw_gift は p_free 引数つきのままで古い画面からも呼べる)
